@@ -4,13 +4,13 @@
 // YE AAPKO FIREBASE CONSOLE SE MILEGA
 // Project Settings -> General -> Your apps -> SDK setup and configuration
 const firebaseConfig = {
-  apiKey: "AIzaSy...APNA_API_KEY_YAHAN_DAALEIN",
-  authDomain: "APNA_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://APNA_PROJECT_ID.firebaseio.com",
-  projectId: "APNA_PROJECT_ID",
-  storageBucket: "APNA_PROJECT_ID.appspot.com",
-  messagingSenderId: "APNA_SENDER_ID",
-  appId: "APNA_APP_ID"
+  apiKey: "AIzaSyC8bz2k1zSJWIpEyeNnSdcGwWjlPbHMoig",
+  authDomain: "pb-milk.firebaseapp.com",
+  databaseURL: "https://pb-milk-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "pb-milk",
+  storageBucket: "pb-milk.firebasestorage.app",
+  messagingSenderId: "170436421819",
+  appId: "1:170436421819:web:d9bda4cbd82c198b53619e"
 };
 
 // Firebase ko in settings ke saath chalu karein
@@ -25,7 +25,7 @@ const db = firebase.database();
 // 2. ADMIN CONFIGURATION (Admin को पहचानने की सेटिंग्स)
 // =================================================================
 // YE UID AAPKO FIREBASE CONSOLE KE AUTHENTICATION SECTION SE MILEGI
-const ADMIN_UID = "YAHAN_ADMIN_KI_UID_PASTE_KAREIN";
+const ADMIN_UID = "W6Q7dkJQhJg5OMc4OxX8ggHk4uK2"
 
 
 // =================================================================
