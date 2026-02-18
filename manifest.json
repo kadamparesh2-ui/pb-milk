@@ -28,9 +28,5 @@
     "utilities"
   ],
   "lang": "en-IN",
-  "dir": "ltr",
-  "display_override": [
-    "standalone",
-    "window-controls-overlay"
-  ]
+  "dir": "ltr"
 }
