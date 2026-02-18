@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - PB Milk Delivery</title>
+    <style>
+        /* Simple styling for the form */
+        body { font-family: sans-serif; padding: 20px; }
+        .form-container { max-width: 400px; margin: auto; border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
+        input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        #error-message { color: red; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="form-container">
+        <h2>Create New Account</h2>
+        
+        <input type="text" id="register-name" placeholder="Full Name" required>
+        <input type="email" id="register-email" placeholder="Email Address" required>
+        <input type="password" id="register-password" placeholder="Password (min. 6 characters)" required>
+        
+        <button id="register-button">Register</button>
+
+        <p id="error-message"></p>
+        <p>Already have an account? <a href="/login.html">Login here</a></p>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <!-- Aapki apni JavaScript file -->
+    <script src="app.js"></script>
+
+    <!-- Is Page ke liye khaas JavaScript -->
+    <script>
+        const registerButton = document.getElementById('register-button');
+        const registerNameInput = document.getElementById('register-name');
+        const registerEmailInput = document.getElementById('register-email');
+        const registerPasswordInput = document.getElementById('register-password');
+        const errorMessage = document.getElementById('error-message');
+
+        registerButton.addEventListener('click', () => {
+            const name = registerNameInput.value;
+            const email = registerEmailInput.value;
+            const password = registerPasswordInput.value;
+
+            errorMessage.textContent = ''; // Purani error saaf karo
+
+            if (!name || !email || !password) {
+                errorMessage.textContent = 'Please fill all fields.';
+                return;
+            }
+
+            // --- YAHAN SAHI LOGIC HAI ---
+            // 1. Pehle Firebase Auth mein user banayein
+            auth.createUserWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    // Registration safal!
+                    const user = userCredential.user;
+                    console.log('User created in Auth:', user.uid);
+
+                    // 2. Ab, Realtime Database mein customer ka data save karein
+                    // Humara naya rule iski permission de dega
+                    return db.ref('customers/' + user.uid).set({
+                        name: name,
+                        email: email,
+                        createdAt: new Date().toISOString()
+                    });
+                })
+                .then(() => {
+                    console.log('Customer data saved in Database.');
+                    alert('Registration Successful! You are now logged in.');
+                    // User ko dashboard ya home page par bhej do
+                    window.location.href = '/index.html'; 
+                })
+                .catch((error) => {
+                    // Error handle karein
+                    console.error('Registration Error:', error.code, error.message);
+                    errorMessage.textContent = error.message;
+                });
+        });
+    </script>
+
+</body>
+</html>
