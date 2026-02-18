@@ -22,8 +22,15 @@
       "purpose": "any"
     }
   ],
-  "categories": ["business", "productivity", "utilities"],
-  "screenshots": [],
+  "categories": [
+    "business",
+    "productivity",
+    "utilities"
+  ],
   "lang": "en-IN",
-  "dir": "ltr"
+  "dir": "ltr",
+  "display_override": [
+    "standalone",
+    "window-controls-overlay"
+  ]
 }
