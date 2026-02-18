@@ -2,7 +2,7 @@
   "name": "PB Milk Delivery System",
   "short_name": "PB Milk",
   "description": "Complete Milk Delivery Order Management System",
-  "start_url": "index.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#6366f1",
   "theme_color": "#6366f1",
