@@ -1,0 +1,35 @@
+{
+  "name": "PB Milk Delivery System",
+  "short_name": "PB Milk",
+  "description": "Complete Milk Delivery Order Management System",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#6366f1",
+  "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect fill='%236366f1' width='512' height='512' rx='100'/%3E%3Ctext x='256' y='380' font-size='320' text-anchor='middle' fill='white' font-family='Arial'%3E🥛%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect fill='%236366f1' width='512' height='512' rx='100'/%3E%3Ctext x='256' y='380' font-size='320' text-anchor='middle' fill='white' font-family='Arial'%3E🥛%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect fill='%236366f1' width='512' height='512' rx='100'/%3E%3Ctext x='256' y='380' font-size='320' text-anchor='middle' fill='white' font-family='Arial'%3E🥛%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "screenshots": [],
+  "lang": "en-IN",
+  "dir": "ltr"
+}
