@@ -25,7 +25,7 @@ const db = firebase.database();
 // 2. ADMIN CONFIGURATION (Admin को पहचानने की सेटिंग्स)
 // =================================================================
 // YE UID AAPKO FIREBASE CONSOLE KE AUTHENTICATION SECTION SE MILEGI
-const ADMIN_UID = "W6Q7dkJQhJg5OMc4OxX8ggHk4uK2"
+const ADMIN_UID = "rgNkBCoLpLX3ywtEf4i3ZEN0RQP2"
 
 
 // =================================================================
