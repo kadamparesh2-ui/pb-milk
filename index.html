@@ -1250,12 +1250,25 @@ async function shareOrdersList() {
 async function loadAdminCustomers() {
   try {
     showSync('syncing');
-    const snapshot = await withTimeout(db.ref('customers').once('value'), 10000, 'Customers load timeout.');
+    const today = new Date().toDateString();
+    const [snapshot, ordersSnap] = await Promise.all([
+      withTimeout(db.ref('customers').once('value'), 10000, 'Customers load timeout.'),
+      withTimeout(db.ref('orders').once('value'), 10000, 'Orders load timeout.')
+    ]);
+
     const customers = [];
     snapshot.forEach(child => {
-  const val = child.val();
-  if (val && val.phone) customers.push(val);
-});
+      const val = child.val();
+      if (val && val.phone) customers.push(val);
+    });
+    customers.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    const todayOrdersMap = {};
+    ordersSnap.forEach(child => {
+      const order = child.val();
+      if (order.date === today) todayOrdersMap[order.customerId] = order;
+    });
+
     customersCache = {};
     customers.forEach(cust => { customersCache[cust.phone] = cust; });
 
@@ -1267,156 +1280,119 @@ async function loadAdminCustomers() {
     const buildingGroups = {};
     customers.forEach(cust => {
       const bldgId = cust.buildingId || 'unknown';
-      if (!buildingGroups[bldgId]) buildingGroups[bldgId] = {buildingName: cust.building || 'Unknown', wings: {}};
+      if (!buildingGroups[bldgId]) buildingGroups[bldgId] = {
+        buildingName: cust.building || 'Unknown',
+        wings: {},
+        buildingTotals: {}
+      };
       const wingId = cust.wingId || 'unknown';
-      if (!buildingGroups[bldgId].wings[wingId]) buildingGroups[bldgId].wings[wingId] = {wingName: cust.wing || 'Unknown', customers: []};
-      buildingGroups[bldgId].wings[wingId].customers.push(cust);
+      if (!buildingGroups[bldgId].wings[wingId]) buildingGroups[bldgId].wings[wingId] = {
+        wingName: cust.wing || 'Unknown',
+        customers: [],
+        wingTotals: {}
+      };
+
+      const todayOrder = todayOrdersMap[cust.phone];
+      if (todayOrder) {
+        Object.keys(todayOrder.items).forEach(prodId => {
+          const qty = todayOrder.items[prodId];
+          buildingGroups[bldgId].wings[wingId].wingTotals[prodId] =
+            (buildingGroups[bldgId].wings[wingId].wingTotals[prodId] || 0) + qty;
+          buildingGroups[bldgId].buildingTotals[prodId] =
+            (buildingGroups[bldgId].buildingTotals[prodId] || 0) + qty;
+        });
+      }
+
+      buildingGroups[bldgId].wings[wingId].customers.push({ cust, todayOrder });
     });
 
     let html = '';
     Object.keys(buildingGroups).forEach(bldgId => {
       const bldgData = buildingGroups[bldgId];
-      const totalCustomers = Object.values(bldgData.wings).reduce((sum, wing) => sum + wing.customers.length, 0);
+      const totalCustomers = Object.values(bldgData.wings).reduce((sum, w) => sum + w.customers.length, 0);
+
+      const bldgTotalHtml = Object.keys(bldgData.buildingTotals).map(prodId => {
+        const prod = productsData[prodId];
+        const qty = bldgData.buildingTotals[prodId];
+        if (!prod || qty <= 0) return '';
+        return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
+      }).filter(Boolean).join(' ');
+
       html += `<div class="building-card" style="margin-bottom:15px">
         <div class="building-header" onclick="toggleCustomerBuilding('${bldgId}')">
-          <div><strong>🏢 ${bldgData.buildingName}</strong><br><small>${totalCustomers} customers</small></div>
-          <span id="cust_arrow_${bldgId}">▼</span>
+          <div style="flex:1">
+            <strong style="font-size:16px">🏢 ${bldgData.buildingName}</strong>
+            <small style="display:block;margin:2px 0">${totalCustomers} customers</small>
+            <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
+              ${bldgTotalHtml || '<small style="opacity:0.7">Aaj koi order nahi</small>'}
+            </div>
+          </div>
+          <span id="cust_arrow_${bldgId}" style="font-size:18px">▼</span>
         </div>
         <div id="cust_content_${bldgId}" class="collapsible-content">`;
 
       Object.keys(bldgData.wings).forEach(wingId => {
         const wingData = bldgData.wings[wingId];
+
+        const wingHasOrders = wingData.customers.some(({ todayOrder }) => todayOrder);
+        if (!wingHasOrders) return;
+
+        const wingTotalHtml = Object.keys(wingData.wingTotals).map(prodId => {
+          const prod = productsData[prodId];
+          const qty = wingData.wingTotals[prodId];
+          if (!prod || qty <= 0) return '';
+          return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
+        }).filter(Boolean).join(' ');
+
         html += `<div class="wing-card" onclick="toggleCustomerWing('${bldgId}_${wingId}')">
           <div class="wing-header">
-            <div><strong>📍 ${wingData.wingName}</strong><br><small>${wingData.customers.length} customers</small></div>
+            <div style="flex:1">
+              <strong>📍 ${wingData.wingName}</strong>
+              <small style="display:block;margin:2px 0">${wingData.customers.length} customers</small>
+              <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
+                ${wingTotalHtml || '<small style="color:#999">Koi order nahi</small>'}
+              </div>
+            </div>
             <span id="cust_arrow_${bldgId}_${wingId}">▶</span>
           </div>
           <div id="cust_content_${bldgId}_${wingId}" class="collapsible-content">`;
 
-        wingData.customers.sort((a,b) => (parseInt(a.flat)||0) - (parseInt(b.flat)||0));
-        wingData.customers.forEach(cust => {
-          let tokensHtml = '';
-          let tokenCount = 0;
-          Object.keys(productsData).forEach(prodId => {
-            const count = cust.tokens ? (cust.tokens[prodId] || 0) : 0;
-            tokenCount += count;
-            if (count > 0) {
-              const prod = productsData[prodId];
-              tokensHtml += `<span style="display:inline-block;padding:4px 8px;margin:2px;border-radius:8px;background:${prod.color}20;border:2px solid ${prod.color};font-size:12px;font-weight:600">${prod.icon} ${count}</span>`;
-            }
-          });
-          if (!tokensHtml) tokensHtml = '<span style="color:#999;font-size:12px">No tokens</span>';
-          const tokenBadge = tokenCount > 0 ? `<span class="badge badge-success">${tokenCount} tokens</span>` : `<span class="badge badge-warning">0 tokens</span>`;
+        wingData.customers.sort((a, b) => (parseInt(a.cust.flat) || 0) - (parseInt(b.cust.flat) || 0));
 
-          html += `<div class="order-item" style="margin:10px">
-            <div class="flex">
-              <div style="flex:1">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-                  <strong style="font-size:16px">🏠 Flat ${cust.flat}</strong>${tokenBadge}
-                </div>
-                <div style="margin-bottom:8px"><strong style="color:#6366f1">${cust.name}</strong><br><small>📱 ${cust.phone}</small></div>
-                <div style="display:flex;flex-wrap:wrap;gap:4px">${tokensHtml}</div>
+        wingData.customers.forEach(({ cust, todayOrder }) => {
+          if (!todayOrder) return;
+
+          const orderHtml = Object.keys(todayOrder.items).map(prodId => {
+            const prod = productsData[prodId];
+            const qty = todayOrder.items[prodId];
+            if (!prod || qty <= 0) return '';
+            return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:13px;font-weight:700;margin:2px">${qty}</span>`;
+          }).filter(Boolean).join(' ');
+
+          html += `<div class="order-item" style="margin:8px 10px">
+            <div class="flex" style="align-items:center">
+              <div style="flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <strong>🏠 Flat ${cust.flat}</strong>
+                ${orderHtml}
               </div>
-              <div style="display:flex;flex-direction:column;gap:5px">
-                <button class="btn btn-sm btn-success" onclick="showAddTokenModal('${cust.phone}')">💰 Tokens</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteCustomer('${cust.phone}')">🗑️ Delete</button>
+              <div style="display:flex;flex-direction:column;gap:5px;margin-left:10px">
+                <button class="btn btn-sm btn-success" onclick="event.stopPropagation();showAddTokenModal('${cust.phone}')">💰 Tokens</button>
+                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteCustomer('${cust.phone}')">🗑️ Delete</button>
               </div>
             </div>
           </div>`;
         });
+
         html += `</div></div>`;
       });
+
       html += `</div></div>`;
     });
 
     document.getElementById('customersList').innerHTML = html;
     showSync('success');
-  } catch(e) { showSync('error'); }
-}
-
-function toggleCustomerBuilding(bldgId) {
-  const content = document.getElementById('cust_content_' + bldgId);
-  const arrow = document.getElementById('cust_arrow_' + bldgId);
-  content.classList.toggle('open');
-  arrow.textContent = content.classList.contains('open') ? '▲' : '▼';
-}
-
-function toggleCustomerWing(wingId) {
-  const content = document.getElementById('cust_content_' + wingId);
-  const arrow = document.getElementById('cust_arrow_' + wingId);
-  content.classList.toggle('open');
-  arrow.textContent = content.classList.contains('open') ? '▼' : '▶';
-}
-
-function showAddTokenModal(phone) {
-  const customer = customersCache[phone];
-  if (!customer) return;
-  const existing = document.getElementById('tokenModal');
-  if (existing) existing.remove();
-
-  let inputsHtml = '';
-  Object.keys(productsData).forEach(prodId => {
-    const prod = productsData[prodId];
-    const current = customer.tokens ? (customer.tokens[prodId] || 0) : 0;
-    inputsHtml += `<div style="margin:12px 0;padding:12px;border:2px solid ${prod.color}40;border-radius:10px;background:${prod.color}10">
-      <label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div><strong style="color:${prod.color}">${prod.icon} ${prod.name}</strong><br><small>Current: ${current} tokens</small></div>
-      </label>
-      <input type="number" id="modal_token_${prodId}" min="0" value="0" class="input" placeholder="Add tokens" style="border-color:${prod.color}">
-    </div>`;
-  });
-
-  document.body.insertAdjacentHTML('beforeend', `
-    <div id="tokenModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:15px" onclick="closeTokenModal()">
-      <div class="card" style="max-width:500px;width:100%;max-height:90vh;overflow-y:auto;margin:0" onclick="event.stopPropagation()">
-        <div class="flex" style="margin-bottom:15px">
-          <h3 style="margin:0">💰 Add Tokens</h3>
-          <button onclick="closeTokenModal()" style="background:#ef4444;color:#fff;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-weight:700">✕</button>
-        </div>
-        <div style="background:#f0f9ff;padding:12px;border-radius:10px;margin-bottom:15px;border:2px solid #3b82f6">
-          <strong style="color:#1e40af">${customer.name}</strong><br>
-          <small>🏠 ${customer.building} - ${customer.wing} - Flat ${customer.flat}</small><br>
-          <small>📱 ${customer.phone}</small>
-        </div>
-        <div>${inputsHtml}</div>
-        <button class="btn btn-success" onclick="addTokensFromModal('${phone}')">✅ Add Tokens</button>
-        <button class="btn btn-sm" onclick="closeTokenModal()" style="background:#6b7280;color:#fff">Cancel</button>
-      </div>
-    </div>`);
-}
-
-function closeTokenModal() {
-  const modal = document.getElementById('tokenModal');
-  if (modal) modal.remove();
-}
-
-async function addTokensFromModal(phone) {
-  const customer = customersCache[phone];
-  const newTokens = {...(customer.tokens || {})};
-  let added = false, summary = '';
-  Object.keys(productsData).forEach(prodId => {
-    const input = document.getElementById('modal_token_' + prodId);
-    if (input) {
-      const qty = parseInt(input.value) || 0;
-      if (qty > 0) {
-        newTokens[prodId] = (newTokens[prodId] || 0) + qty;
-        summary += `${productsData[prodId].icon} ${productsData[prodId].name}: +${qty}\n`;
-        added = true;
-      }
-    }
-  });
-  if (!added) { alert('⚠️ Kam se kam 1 token daalo!'); return; }
-  if (!confirm(`💰 ${customer.name} ko tokens add karo?\n\n${summary}`)) return;
-  try {
-    showSync('syncing');
-    await withTimeout(db.ref('customers/' + phone + '/tokens').set(newTokens), 8000, 'Token save timeout.');
-    showSync('success');
-    alert('✅ Tokens Add Ho Gaye!');
-    closeTokenModal();
-    loadAdminCustomers();
-  } catch(e) { showSync('error'); alert('❌ Error: ' + e.message); }
-}
-
+  } catch(e) { showSync('error'); console.error(e); }
+          }
 // =============================================
 // ADMIN BUILDINGS
 // =============================================
