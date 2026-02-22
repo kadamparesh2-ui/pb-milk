@@ -1250,11 +1250,7 @@ async function shareOrdersList() {
 async function loadAdminCustomers() {
   try {
     showSync('syncing');
-    const today = new Date().toDateString();
-    const [snapshot, ordersSnap] = await Promise.all([
-      withTimeout(db.ref('customers').once('value'), 10000, 'Customers load timeout.'),
-      withTimeout(db.ref('orders').once('value'), 10000, 'Orders load timeout.')
-    ]);
+    const snapshot = await withTimeout(db.ref('customers').once('value'), 10000, 'Customers load timeout.');
 
     const customers = [];
     snapshot.forEach(child => {
@@ -1262,12 +1258,6 @@ async function loadAdminCustomers() {
       if (val && val.phone) customers.push(val);
     });
     customers.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-    const todayOrdersMap = {};
-    ordersSnap.forEach(child => {
-      const order = child.val();
-      if (order.date === today) todayOrdersMap[order.customerId] = order;
-    });
 
     customersCache = {};
     customers.forEach(cust => { customersCache[cust.phone] = cust; });
@@ -1282,28 +1272,14 @@ async function loadAdminCustomers() {
       const bldgId = cust.buildingId || 'unknown';
       if (!buildingGroups[bldgId]) buildingGroups[bldgId] = {
         buildingName: cust.building || 'Unknown',
-        wings: {},
-        buildingTotals: {}
+        wings: {}
       };
       const wingId = cust.wingId || 'unknown';
       if (!buildingGroups[bldgId].wings[wingId]) buildingGroups[bldgId].wings[wingId] = {
         wingName: cust.wing || 'Unknown',
-        customers: [],
-        wingTotals: {}
+        customers: []
       };
-
-      const todayOrder = todayOrdersMap[cust.phone];
-      if (todayOrder) {
-        Object.keys(todayOrder.items).forEach(prodId => {
-          const qty = todayOrder.items[prodId];
-          buildingGroups[bldgId].wings[wingId].wingTotals[prodId] =
-            (buildingGroups[bldgId].wings[wingId].wingTotals[prodId] || 0) + qty;
-          buildingGroups[bldgId].buildingTotals[prodId] =
-            (buildingGroups[bldgId].buildingTotals[prodId] || 0) + qty;
-        });
-      }
-
-      buildingGroups[bldgId].wings[wingId].customers.push({ cust, todayOrder });
+      buildingGroups[bldgId].wings[wingId].customers.push(cust);
     });
 
     let html = '';
@@ -1311,21 +1287,11 @@ async function loadAdminCustomers() {
       const bldgData = buildingGroups[bldgId];
       const totalCustomers = Object.values(bldgData.wings).reduce((sum, w) => sum + w.customers.length, 0);
 
-      const bldgTotalHtml = Object.keys(bldgData.buildingTotals).map(prodId => {
-        const prod = productsData[prodId];
-        const qty = bldgData.buildingTotals[prodId];
-        if (!prod || qty <= 0) return '';
-        return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
-      }).filter(Boolean).join(' ');
-
       html += `<div class="building-card" style="margin-bottom:15px">
         <div class="building-header" onclick="toggleCustomerBuilding('${bldgId}')">
           <div style="flex:1">
             <strong style="font-size:16px">🏢 ${bldgData.buildingName}</strong>
             <small style="display:block;margin:2px 0">${totalCustomers} customers</small>
-            <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
-              ${bldgTotalHtml || '<small style="opacity:0.7">Aaj koi order nahi</small>'}
-            </div>
           </div>
           <span id="cust_arrow_${bldgId}" style="font-size:18px">▼</span>
         </div>
@@ -1334,46 +1300,40 @@ async function loadAdminCustomers() {
       Object.keys(bldgData.wings).forEach(wingId => {
         const wingData = bldgData.wings[wingId];
 
-        const wingHasOrders = wingData.customers.some(({ todayOrder }) => todayOrder);
-        if (!wingHasOrders) return;
-
-        const wingTotalHtml = Object.keys(wingData.wingTotals).map(prodId => {
-          const prod = productsData[prodId];
-          const qty = wingData.wingTotals[prodId];
-          if (!prod || qty <= 0) return '';
-          return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
-        }).filter(Boolean).join(' ');
-
         html += `<div class="wing-card" onclick="toggleCustomerWing('${bldgId}_${wingId}')">
           <div class="wing-header">
             <div style="flex:1">
               <strong>📍 ${wingData.wingName}</strong>
               <small style="display:block;margin:2px 0">${wingData.customers.length} customers</small>
-              <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
-                ${wingTotalHtml || '<small style="color:#999">Koi order nahi</small>'}
-              </div>
             </div>
             <span id="cust_arrow_${bldgId}_${wingId}">▶</span>
           </div>
           <div id="cust_content_${bldgId}_${wingId}" class="collapsible-content">`;
 
-        wingData.customers.sort((a, b) => (parseInt(a.cust.flat) || 0) - (parseInt(b.cust.flat) || 0));
+        wingData.customers.sort((a, b) => (parseInt(a.flat) || 0) - (parseInt(b.flat) || 0));
 
-        wingData.customers.forEach(({ cust, todayOrder }) => {
-          if (!todayOrder) return;
-
-          const orderHtml = Object.keys(todayOrder.items).map(prodId => {
-            const prod = productsData[prodId];
-            const qty = todayOrder.items[prodId];
-            if (!prod || qty <= 0) return '';
-            return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:13px;font-weight:700;margin:2px">${qty}</span>`;
-          }).filter(Boolean).join(' ');
+        wingData.customers.forEach(cust => {
+          let tokensHtml = '';
+          let tokenCount = 0;
+          Object.keys(productsData).forEach(prodId => {
+            const count = cust.tokens ? (cust.tokens[prodId] || 0) : 0;
+            tokenCount += count;
+            if (count > 0) {
+              const prod = productsData[prodId];
+              tokensHtml += `<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:12px;background:${prod.color};color:#fff;font-size:12px;font-weight:700">${prod.icon} ${count}</span>`;
+            }
+          });
+          if (!tokensHtml) tokensHtml = '<small style="color:#999">No tokens</small>';
 
           html += `<div class="order-item" style="margin:8px 10px">
-            <div class="flex" style="align-items:center">
-              <div style="flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <strong>🏠 Flat ${cust.flat}</strong>
-                ${orderHtml}
+            <div class="flex" style="align-items:flex-start">
+              <div style="flex:1">
+                <div style="margin-bottom:5px">
+                  <strong>🏠 Flat ${cust.flat}</strong>
+                  &nbsp;<strong style="color:#6366f1">${cust.name}</strong>
+                  &nbsp;<small style="color:#6b7280">📱 ${cust.phone}</small>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px">${tokensHtml}</div>
               </div>
               <div style="display:flex;flex-direction:column;gap:5px;margin-left:10px">
                 <button class="btn btn-sm btn-success" onclick="event.stopPropagation();showAddTokenModal('${cust.phone}')">💰 Tokens</button>
@@ -1392,7 +1352,7 @@ async function loadAdminCustomers() {
     document.getElementById('customersList').innerHTML = html;
     showSync('success');
   } catch(e) { showSync('error'); console.error(e); }
-          }
+}
 // =============================================
 // ADMIN BUILDINGS
 // =============================================
