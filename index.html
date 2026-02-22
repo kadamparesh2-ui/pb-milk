@@ -1252,7 +1252,10 @@ async function loadAdminCustomers() {
     showSync('syncing');
     const snapshot = await withTimeout(db.ref('customers').once('value'), 10000, 'Customers load timeout.');
     const customers = [];
-    snapshot.forEach(child => customers.push(child.val()));
+    snapshot.forEach(child => {
+  const val = child.val();
+  if (val && val.phone) customers.push(val);
+});
     customersCache = {};
     customers.forEach(cust => { customersCache[cust.phone] = cust; });
 
