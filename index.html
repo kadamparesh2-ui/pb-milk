@@ -1059,191 +1059,103 @@ async function loadAdminOrders() {
     const buildingGroups = {};
     todayOrders.forEach(order => {
       const bldgId = order.buildingId || 'unknown';
-      if (!buildingGroups[bldgId]) buildingGroups[bldgId] = {buildingName: order.building || 'Unknown', wings: {}};
+      if (!buildingGroups[bldgId]) buildingGroups[bldgId] = {
+        buildingName: order.building || 'Unknown',
+        wings: {},
+        buildingTotals: {}
+      };
       const wingId = order.wingId || 'unknown';
-      if (!buildingGroups[bldgId].wings[wingId]) buildingGroups[bldgId].wings[wingId] = {wingName: order.wing || 'Unknown', orders: [], totals: {}};
+      if (!buildingGroups[bldgId].wings[wingId]) buildingGroups[bldgId].wings[wingId] = {
+        wingName: order.wing || 'Unknown',
+        orders: [],
+        wingTotals: {}
+      };
       buildingGroups[bldgId].wings[wingId].orders.push(order);
       Object.keys(order.items).forEach(prodId => {
-        buildingGroups[bldgId].wings[wingId].totals[prodId] = (buildingGroups[bldgId].wings[wingId].totals[prodId] || 0) + order.items[prodId];
+        const qty = order.items[prodId];
+        buildingGroups[bldgId].wings[wingId].wingTotals[prodId] =
+          (buildingGroups[bldgId].wings[wingId].wingTotals[prodId] || 0) + qty;
+        buildingGroups[bldgId].buildingTotals[prodId] =
+          (buildingGroups[bldgId].buildingTotals[prodId] || 0) + qty;
       });
     });
 
     let html = '';
     Object.keys(buildingGroups).forEach(bldgId => {
       const bldgData = buildingGroups[bldgId];
-      const totalBldgOrders = Object.values(bldgData.wings).reduce((sum, wing) => sum + wing.orders.length, 0);
-      html += `<div class="building-card">
+      const totalOrders = Object.values(bldgData.wings).reduce((sum, w) => sum + w.orders.length, 0);
+
+      const bldgTotalHtml = Object.keys(bldgData.buildingTotals).map(prodId => {
+        const prod = productsData[prodId];
+        const qty = bldgData.buildingTotals[prodId];
+        if (!prod || qty <= 0) return '';
+        return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
+      }).filter(Boolean).join(' ');
+
+      html += `<div class="building-card" style="margin-bottom:15px">
         <div class="building-header" onclick="toggleBuilding('${bldgId}')">
-          <div><strong>🏢 ${bldgData.buildingName}</strong><br><small>${totalBldgOrders} orders today</small></div>
-          <span id="arrow_${bldgId}">▼</span>
+          <div style="flex:1">
+            <strong style="font-size:16px">🏢 ${bldgData.buildingName}</strong>
+            <small style="display:block;margin:2px 0">${totalOrders} orders</small>
+            <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
+              ${bldgTotalHtml || '<small style="opacity:0.7">Koi order nahi</small>'}
+            </div>
+          </div>
+          <span id="arrow_${bldgId}" style="font-size:18px">▼</span>
         </div>
         <div id="content_${bldgId}" class="collapsible-content">`;
 
       Object.keys(bldgData.wings).forEach(wingId => {
         const wingData = bldgData.wings[wingId];
-        let milkSummary = '<div class="milk-summary">';
-        Object.keys(wingData.totals).forEach(prodId => {
+
+        const wingTotalHtml = Object.keys(wingData.wingTotals).map(prodId => {
           const prod = productsData[prodId];
-          if (prod) milkSummary += `<div class="milk-item"><span>${prod.icon} ${prod.name}</span><strong>${wingData.totals[prodId]} pkts</strong></div>`;
-        });
-        milkSummary += '</div>';
+          const qty = wingData.wingTotals[prodId];
+          if (!prod || qty <= 0) return '';
+          return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
+        }).filter(Boolean).join(' ');
 
         html += `<div class="wing-card" onclick="toggleWing('${bldgId}_${wingId}')">
           <div class="wing-header">
-            <div><strong>📍 ${wingData.wingName}</strong><br><small>${wingData.orders.length} customers</small></div>
+            <div style="flex:1">
+              <strong>📍 ${wingData.wingName}</strong>
+              <small style="display:block;margin:2px 0">${wingData.orders.length} orders</small>
+              <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
+                ${wingTotalHtml || '<small style="color:#999">Koi order nahi</small>'}
+              </div>
+            </div>
             <span id="arrow_${bldgId}_${wingId}">▶</span>
           </div>
-          <div id="content_${bldgId}_${wingId}" class="collapsible-content">
-            <h4 style="margin:10px 0;color:#6366f1">Wing Total Milk:</h4>${milkSummary}
-            <h4 style="margin:15px 0 10px;color:#6366f1">Customer Orders:</h4>`;
+          <div id="content_${bldgId}_${wingId}" class="collapsible-content">`;
+
+        wingData.orders.sort((a, b) => (parseInt(a.flat) || 0) - (parseInt(b.flat) || 0));
 
         wingData.orders.forEach(order => {
-          const dt = new Date(order.createdAt);
-          let itemsHtml = '';
-          Object.keys(order.items).forEach(prodId => {
+          const orderHtml = Object.keys(order.items).map(prodId => {
             const prod = productsData[prodId];
-            if (prod) itemsHtml += `${prod.icon} ${prod.name} ×${order.items[prodId]}<br>`;
-          });
-          html += `<div class="order-item" style="margin:10px 0">
-            <div class="flex"><div><strong>${order.customerName}</strong><br><small>Flat: ${order.flat}</small></div><small>${dt.toLocaleTimeString()}</small></div>
-            <div style="margin:10px 0;padding:10px;background:#f9fafb;border-radius:8px;font-size:13px">${itemsHtml}</div>
-            <div class="flex"><strong>${order.totalQuantity} pkts</strong><strong style="color:#10b981">₹${order.totalAmount}</strong></div>
+            const qty = order.items[prodId];
+            if (!prod || qty <= 0) return '';
+            return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:13px;font-weight:700;margin:2px">${qty}</span>`;
+          }).filter(Boolean).join(' ');
+
+          html += `<div class="order-item" style="margin:8px 10px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <strong>🏠 Flat ${order.flat}</strong>
+              ${orderHtml}
+            </div>
           </div>`;
         });
+
         html += `</div></div>`;
       });
+
       html += `</div></div>`;
     });
 
     document.getElementById('todayOrdersBuildings').innerHTML = html;
     showSync('success');
-  } catch(e) { showSync('error'); }
+  } catch(e) { showSync('error'); console.error(e); }
 }
-
-function toggleBuilding(bldgId) {
-  const content = document.getElementById('content_' + bldgId);
-  const arrow = document.getElementById('arrow_' + bldgId);
-  content.classList.toggle('open');
-  arrow.textContent = content.classList.contains('open') ? '▲' : '▼';
-}
-
-function toggleWing(wingId) {
-  const content = document.getElementById('content_' + wingId);
-  const arrow = document.getElementById('arrow_' + wingId);
-  content.classList.toggle('open');
-  arrow.textContent = content.classList.contains('open') ? '▼' : '▶';
-}
-
-async function copyOrdersList() {
-  try {
-    const ordersSnap = await withTimeout(db.ref('orders').once('value'), 10000, 'Timeout.');
-    const orders = [];
-    ordersSnap.forEach(child => orders.push(child.val()));
-    const today = new Date().toDateString();
-    const todayOrders = orders.filter(o => o.date === today);
-    if (todayOrders.length === 0) { alert('⚠️ Aaj koi order nahi!'); return; }
-
-    let orderText = `📋 PB MILK - TODAY'S ORDERS\n📅 Date: ${today}\n🔢 Total Orders: ${todayOrders.length}\n${'='.repeat(40)}\n\n`;
-    const buildingGroups = {};
-    todayOrders.forEach(order => {
-      const bldgId = order.buildingId || 'unknown';
-      if (!buildingGroups[bldgId]) buildingGroups[bldgId] = {buildingName: order.building || 'Unknown', wings: {}};
-      const wingId = order.wingId || 'unknown';
-      if (!buildingGroups[bldgId].wings[wingId]) buildingGroups[bldgId].wings[wingId] = {wingName: order.wing || 'Unknown', orders: [], totals: {}};
-      buildingGroups[bldgId].wings[wingId].orders.push(order);
-      Object.keys(order.items).forEach(prodId => {
-        buildingGroups[bldgId].wings[wingId].totals[prodId] = (buildingGroups[bldgId].wings[wingId].totals[prodId] || 0) + order.items[prodId];
-      });
-    });
-
-    Object.keys(buildingGroups).forEach(bldgId => {
-      const bldgData = buildingGroups[bldgId];
-      orderText += `🏢 ${bldgData.buildingName}\n${'-'.repeat(40)}\n`;
-      Object.keys(bldgData.wings).forEach(wingId => {
-        const wingData = bldgData.wings[wingId];
-        orderText += `\n📍 ${wingData.wingName}\n   TOTAL MILK:\n`;
-        Object.keys(wingData.totals).forEach(prodId => {
-          const prod = productsData[prodId];
-          if (prod) orderText += `   ${prod.icon} ${prod.name}: ${wingData.totals[prodId]} pkts\n`;
-        });
-        orderText += `\n   CUSTOMERS:\n`;
-        wingData.orders.forEach(order => {
-          orderText += `   • ${order.customerName} (Flat ${order.flat})\n`;
-          Object.keys(order.items).forEach(prodId => {
-            const prod = productsData[prodId];
-            if (prod) orderText += `     ${prod.icon} ${prod.name} × ${order.items[prodId]}\n`;
-          });
-          orderText += `     Total: ${order.totalQuantity} pkts | ₹${order.totalAmount}\n`;
-        });
-        orderText += '\n';
-      });
-      orderText += '\n';
-    });
-
-    let grandTotal = 0, grandRevenue = 0;
-    todayOrders.forEach(o => { grandTotal += o.totalQuantity; grandRevenue += o.totalAmount; });
-    orderText += `${'='.repeat(40)}\n📊 GRAND TOTAL\n   Total Packets: ${grandTotal}\n   Total Revenue: ₹${grandRevenue}\n${'='.repeat(40)}\n\n📱 PB Milk Delivery System`;
-
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(orderText);
-      alert('✅ Orders list copy ho gayi!');
-    } else {
-      const textArea = document.createElement('textarea');
-      textArea.value = orderText;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      alert('✅ Orders list copy ho gayi!');
-    }
-  } catch(e) { alert('❌ Error: ' + e.message); }
-}
-
-async function shareOrdersList() {
-  try {
-    const ordersSnap = await withTimeout(db.ref('orders').once('value'), 10000, 'Timeout.');
-    const orders = [];
-    ordersSnap.forEach(child => orders.push(child.val()));
-    const today = new Date().toDateString();
-    const todayOrders = orders.filter(o => o.date === today);
-    if (todayOrders.length === 0) { alert('⚠️ Aaj koi order nahi!'); return; }
-
-    let orderText = `📋 PB MILK - TODAY'S ORDERS\n📅 Date: ${today}\n🔢 Total: ${todayOrders.length} orders\n\n`;
-    const buildingGroups = {};
-    todayOrders.forEach(order => {
-      const bldgId = order.buildingId || 'unknown';
-      if (!buildingGroups[bldgId]) buildingGroups[bldgId] = {buildingName: order.building || 'Unknown', wings: {}};
-      const wingId = order.wingId || 'unknown';
-      if (!buildingGroups[bldgId].wings[wingId]) buildingGroups[bldgId].wings[wingId] = {wingName: order.wing || 'Unknown', orders: [], totals: {}};
-      buildingGroups[bldgId].wings[wingId].orders.push(order);
-      Object.keys(order.items).forEach(prodId => {
-        buildingGroups[bldgId].wings[wingId].totals[prodId] = (buildingGroups[bldgId].wings[wingId].totals[prodId] || 0) + order.items[prodId];
-      });
-    });
-
-    Object.keys(buildingGroups).forEach(bldgId => {
-      const bldgData = buildingGroups[bldgId];
-      orderText += `🏢 ${bldgData.buildingName}\n`;
-      Object.keys(bldgData.wings).forEach(wingId => {
-        const wingData = bldgData.wings[wingId];
-        orderText += `📍 ${wingData.wingName}: `;
-        orderText += Object.keys(wingData.totals).map(prodId => {
-          const prod = productsData[prodId];
-          return prod ? `${prod.name} ${wingData.totals[prodId]}` : '';
-        }).filter(Boolean).join(', ') + '\n';
-      });
-      orderText += '\n';
-    });
-
-    if (navigator.share) {
-      await navigator.share({ title: "PB Milk Orders", text: orderText });
-    } else {
-      if (navigator.clipboard) await navigator.clipboard.writeText(orderText);
-      alert('✅ Orders copy ho gayi! WhatsApp ya Email se share karo.');
-    }
-  } catch(e) { console.log('Share cancelled'); }
-}
-
 // =============================================
 // ADMIN CUSTOMERS
 // =============================================
