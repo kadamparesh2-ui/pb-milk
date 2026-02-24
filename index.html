@@ -1212,8 +1212,8 @@ async function loadAdminCustomers() {
       Object.keys(bldgData.wings).forEach(wingId => {
         const wingData = bldgData.wings[wingId];
 
-        <div class="wing-card">
-<div class="wing-header" onclick="toggleCustomerWing('${bldgId}_${wingId}')">
+       <div class="wing-card" onclick="toggleCustomerWing('${bldgId}_${wingId}')">
+<div class="wing-header">
             <div style="flex:1">
               <strong>📍 ${wingData.wingName}</strong>
               <small style="display:block;margin:2px 0">${wingData.customers.length} customers</small>
