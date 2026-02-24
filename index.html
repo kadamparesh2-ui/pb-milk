@@ -1232,7 +1232,7 @@ async function loadAdminCustomers() {
             tokenCount += count;
             if (count > 0) {
               const prod = productsData[prodId];
-              tokensHtml += `<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:12px;background:${prod.color};color:#fff;font-size:12px;font-weight:700">${prod.icon} ${count}</span>`;
+              tokensHtml += `<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:12px;background:${prod.color};color:#fff;font-size:12px;font-weight:700">${prod.icon} ${prod.name}: ${count}</span>`;
             }
           });
           if (!tokensHtml) tokensHtml = '<small style="color:#999">No tokens</small>';
@@ -1248,8 +1248,8 @@ async function loadAdminCustomers() {
                 <div style="display:flex;flex-wrap:wrap;gap:4px">${tokensHtml}</div>
               </div>
               <div style="display:flex;flex-direction:column;gap:5px;margin-left:10px">
-                <button class="btn btn-sm btn-success" onclick="event.stopPropagation();showAddTokenModal('${cust.phone}')">💰 Tokens</button>
-                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteCustomer('${cust.phone}')">🗑️ Delete</button>
+                <button class="btn btn-sm btn-success" onclick="event.stopPropagation();event.preventDefault();showAddTokenModal('${cust.phone}')">💰 Tokens</button>
+                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();event.preventDefault();deleteCustomer('${cust.phone}')">🗑️ Delete</button>
               </div>
             </div>
           </div>`;
@@ -1264,21 +1264,6 @@ async function loadAdminCustomers() {
     document.getElementById('customersList').innerHTML = html;
     showSync('success');
   } catch(e) { showSync('error'); console.error(e); }
-}
-    function toggleCustomerBuilding(bldgId) {
-  const content = document.getElementById('cust_content_' + bldgId);
-  const arrow = document.getElementById('cust_arrow_' + bldgId);
-  if (!content) return;
-  content.classList.toggle('open');
-  arrow.textContent = content.classList.contains('open') ? '▲' : '▼';
-}
-
-function toggleCustomerWing(wingId) {
-  const content = document.getElementById('cust_content_' + wingId);
-  const arrow = document.getElementById('cust_arrow_' + wingId);
-  if (!content) return;
-  content.classList.toggle('open');
-  arrow.textContent = content.classList.contains('open') ? '▼' : '▶';
 }
 // =============================================
 // ADMIN BUILDINGS
