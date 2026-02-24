@@ -1248,8 +1248,8 @@ async function loadAdminCustomers() {
                 <div style="display:flex;flex-wrap:wrap;gap:4px">${tokensHtml}</div>
               </div>
               <div style="display:flex;flex-direction:column;gap:5px;margin-left:10px">
-                <button class="btn btn-sm btn-success" onclick="event.stopPropagation();event.preventDefault();showAddTokenModal('${cust.phone}')">💰 Tokens</button>
-                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();event.preventDefault();deleteCustomer('${cust.phone}')">🗑️ Delete</button>
+                <button class="btn btn-sm btn-success" onclick="showAddTokenModal('${cust.phone}')">💰 Tokens</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteCustomer('${cust.phone}')">🗑️ Delete</button>
               </div>
             </div>
           </div>`;
