@@ -1222,9 +1222,9 @@ async function loadAdminCustomers() {
           </div>
           <div id="cust_content_${bldgId}_${wingId}" class="collapsible-content">`;
 
-        wingData.customers || []).sort((a, b) => (parseInt(a.flat) || 0) - (parseInt(b.flat) || 0));
+        (wingData.customers || []).sort((a, b) => (parseInt(a.flat) || 0) - (parseInt(b.flat) || 0));
 
-        wingData.customers || []).forEach(cust => {
+        (wingData.customers || []).forEach(cust => {
           let tokensHtml = '';
           let tokenCount = 0;
           console.log(productsData);
