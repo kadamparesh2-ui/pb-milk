@@ -1778,7 +1778,61 @@ function downloadAppFile(htmlContent) {
   URL.revokeObjectURL(url);
   alert('✅ App download ho gayi!\n\nWhatsApp ya Email se share karo.');
 }
+async function showAddTokenModal(phone) {
+  const customer = customersCache[phone];
+  if (!customer) { alert('Customer nahi mila!'); return; }
+  
+  let tokenInputs = '';
+  Object.keys(productsData).forEach(prodId => {
+    const prod = productsData[prodId];
+    const current = customer.tokens ? (customer.tokens[prodId] || 0) : 0;
+    tokenInputs += `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb">
+        <div><strong>${prod.icon} ${prod.name}</strong><br><small style="color:#6b7280">Current: ${current}</small></div>
+        <input type="number" id="tok_${prodId}" min="0" value="0"
+          style="width:70px;padding:8px;border-radius:8px;border:2px solid #e5e7eb;text-align:center;font-weight:700">
+      </div>`;
+  });
 
+  const modal = document.createElement('div');
+  modal.id = 'tokenModal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:400px;max-height:80vh;overflow-y:auto">
+      <h3 style="margin-bottom:5px">💰 Add Tokens</h3>
+      <p style="color:#6b7280;font-size:13px;margin-bottom:15px">${customer.name} - Flat ${customer.flat}</p>
+      ${tokenInputs}
+      <button onclick="saveTokens('${phone}')" class="btn btn-success" style="margin-top:15px">✅ Save Tokens</button>
+      <button onclick="document.getElementById('tokenModal').remove()" class="btn" style="background:#6b7280;color:#fff">❌ Cancel</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function saveTokens(phone) {
+  const customer = customersCache[phone];
+  const newTokens = {...(customer.tokens || {})};
+  
+  Object.keys(productsData).forEach(prodId => {
+    const input = document.getElementById('tok_' + prodId);
+    if (input) {
+      const addQty = parseInt(input.value) || 0;
+      newTokens[prodId] = (newTokens[prodId] || 0) + addQty;
+    }
+  });
+
+  try {
+    showSync('syncing');
+    await withTimeout(db.ref('customers/' + phone + '/tokens').set(newTokens), 8000, 'Token save timeout.');
+    customersCache[phone].tokens = newTokens;
+    showSync('success');
+    document.getElementById('tokenModal').remove();
+    alert('✅ Tokens Add Ho Gaye!');
+    loadAdminCustomers();
+  } catch(e) {
+    showSync('error');
+    alert('❌ Error: ' + e.message);
+  }
+    }
 // =============================================
 // LOGOUT
 // =============================================
