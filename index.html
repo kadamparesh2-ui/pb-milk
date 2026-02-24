@@ -1265,6 +1265,21 @@ async function loadAdminCustomers() {
     showSync('success');
   } catch(e) { showSync('error'); console.error(e); }
 }
+    function toggleCustomerBuilding(bldgId) {
+  const content = document.getElementById('cust_content_' + bldgId);
+  const arrow = document.getElementById('cust_arrow_' + bldgId);
+  if (!content) return;
+  content.classList.toggle('open');
+  arrow.textContent = content.classList.contains('open') ? '▲' : '▼';
+}
+
+function toggleCustomerWing(wingId) {
+  const content = document.getElementById('cust_content_' + wingId);
+  const arrow = document.getElementById('cust_arrow_' + wingId);
+  if (!content) return;
+  content.classList.toggle('open');
+  arrow.textContent = content.classList.contains('open') ? '▼' : '▶';
+    }
 // =============================================
 // ADMIN BUILDINGS
 // =============================================
