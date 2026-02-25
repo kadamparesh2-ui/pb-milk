@@ -764,6 +764,8 @@ async function loadCustomerDashboard() {
   try {
     const snapshot = await withTimeout(db.ref('customers/' + currentUser.data.phone).once('value'), 8000, 'Data load timeout.');
     currentUser.data = snapshot.val();
+      const freshProd = await withTimeout(db.ref('products').once('value'), 8000, 'Products timeout.');
+productsData = freshProd.val() || {};
     document.getElementById('custName').textContent = currentUser.data.name;
     document.getElementById('custAddr').textContent = currentUser.data.building + ' - ' + currentUser.data.wing + ' - Flat ' + currentUser.data.flat;
 
