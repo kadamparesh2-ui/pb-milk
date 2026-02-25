@@ -983,8 +983,13 @@ async function loadAdminOrders() {
     const orders = [];
     ordersSnap.forEach(child => orders.push(child.val()));
     const today = new Date().toDateString();
-    const todayOrders = orders.filter(o => o.date === today);
-
+    const todayOrders = orders.filter(o => {
+  if (o.date === today) return true;
+  if (o.createdAt) {
+    return new Date(o.createdAt).toDateString() === today;
+  }
+  return false;
+});
     if (todayOrders.length === 0) {
       document.getElementById('todayOrdersBuildings').innerHTML = '<div style="text-align:center;padding:40px;color:#999">📋 Aaj koi order nahi</div>';
       showSync('success'); return;
