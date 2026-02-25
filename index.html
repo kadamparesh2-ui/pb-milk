@@ -870,7 +870,7 @@ async function placeOrder() {
       buildingId: currentUser.data.buildingId, building: currentUser.data.building,
       wingId: currentUser.data.wingId, wing: currentUser.data.wing, flat: currentUser.data.flat,
       items: orderItems, totalQuantity: totalQty, totalAmount: totalAmt,
-      status: 'pending', createdAt: new Date().toISOString(), date: new Date().toDateString()
+      status: 'pending', createdAt: new Date().toISOString(), date: new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000)).toDateString()
     }), 8000, 'Order save timeout.');
     showSync('success');
     alert('✅ Order Place Ho Gaya!\n\nTotal: ' + totalQty + ' packets\nAmount: ₹' + totalAmt);
