@@ -979,27 +979,22 @@ function setupOrderListener() {
 async function loadAdminOrders() {
   try {
     showSync('syncing');
-      const freshProd = await withTimeout(db.ref('products').once('value'), 8000, 'Products timeout.');
-productsData = freshProd.val() || {};
+    const freshProd = await withTimeout(db.ref('products').once('value'), 8000, 'Products timeout.');
+    productsData = freshProd.val() || {};
     const ordersSnap = await withTimeout(db.ref('orders').once('value'), 10000, 'Orders load timeout.');
     const orders = [];
     ordersSnap.forEach(child => orders.push(child.val()));
-    const todayIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
-const today = todayIST.toDateString();
-const todayOrders = orders.filter(o => {
-  if (o.date === today) return true;
-  if (o.createdAt) {
-    const orderDateIST = new Date(new Date(o.createdAt).getTime() + (5.5 * 60 * 60 * 1000));
-    return orderDateIST.toDateString() === today;
-  }
-  return false;
-});
-  
+    const todayStr = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'});
+    const todayOrders = orders.filter(o => {
+      if (!o.date && !o.createdAt) return false;
+      const d = o.date || new Date(o.createdAt).toDateString();
+      const dParts = new Date(d).toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'});
+      return dParts === todayStr || o.date === new Date().toDateString();
+    });
     if (todayOrders.length === 0) {
-      document.getElementById('todayOrdersBuildings').innerHTML = '<div style="text-align:center;padding:40px;color:#999">📋 Aaj koi order nahi</div>';
+      document.getElementById('todayOrdersBuildings').innerHTML = '<div style="text-align:center;padding:40px;color:#999">📋 Aaj koi order nahi<br><small>Total orders in DB: ' + orders.length + '</small></div>';
       showSync('success'); return;
     }
-
     const buildingGroups = {};
     todayOrders.forEach(order => {
       const bldgId = order.buildingId || 'unknown';
@@ -1007,13 +1002,12 @@ const todayOrders = orders.filter(o => {
       const wingId = order.wingId || 'unknown';
       if (!buildingGroups[bldgId].wings[wingId]) buildingGroups[bldgId].wings[wingId] = {wingName: order.wing || 'Unknown', orders: [], wingTotals: {}};
       buildingGroups[bldgId].wings[wingId].orders.push(order);
-      Object.keys(order.items).forEach(prodId => {
+      Object.keys(order.items || {}).forEach(prodId => {
         const qty = order.items[prodId];
         buildingGroups[bldgId].wings[wingId].wingTotals[prodId] = (buildingGroups[bldgId].wings[wingId].wingTotals[prodId] || 0) + qty;
         buildingGroups[bldgId].buildingTotals[prodId] = (buildingGroups[bldgId].buildingTotals[prodId] || 0) + qty;
       });
     });
-
     let html = '';
     Object.keys(buildingGroups).forEach(bldgId => {
       const bldgData = buildingGroups[bldgId];
@@ -1021,37 +1015,33 @@ const todayOrders = orders.filter(o => {
       const bldgTotalHtml = Object.keys(bldgData.buildingTotals).map(prodId => {
         const prod = productsData[prodId]; const qty = bldgData.buildingTotals[prodId];
         if (!prod || qty <= 0) return '';
-        return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
+        return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color||'#6366f1'};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
       }).filter(Boolean).join(' ');
-
       html += `<div class="building-card" style="margin-bottom:15px">
         <div class="building-header" onclick="toggleBuilding('${bldgId}')">
           <div style="flex:1"><strong style="font-size:16px">🏢 ${bldgData.buildingName}</strong><small style="display:block;margin:2px 0">${totalOrders} orders</small>
-          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${bldgTotalHtml || '<small style="opacity:0.7">Koi order nahi</small>'}</div></div>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${bldgTotalHtml || '<small style="opacity:0.7">No items</small>'}</div></div>
           <span id="arrow_${bldgId}" style="font-size:18px">▼</span>
         </div>
         <div id="content_${bldgId}" class="collapsible-content">`;
-
       Object.keys(bldgData.wings).forEach(wingId => {
         const wingData = bldgData.wings[wingId];
         const wingTotalHtml = Object.keys(wingData.wingTotals).map(prodId => {
           const prod = productsData[prodId]; const qty = wingData.wingTotals[prodId];
           if (!prod || qty <= 0) return '';
-          return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
+          return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color||'#6366f1'};color:#fff;font-size:12px;font-weight:700;margin:2px">${prod.name} ${qty}</span>`;
         }).filter(Boolean).join(' ');
-
         html += `<div class="wing-card" onclick="toggleWing('${bldgId}_${wingId}')">
           <div class="wing-header"><div style="flex:1"><strong>📍 ${wingData.wingName}</strong><small style="display:block;margin:2px 0">${wingData.orders.length} orders</small>
-          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${wingTotalHtml || '<small style="color:#999">Koi order nahi</small>'}</div></div>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${wingTotalHtml}</div></div>
           <span id="arrow_${bldgId}_${wingId}">▶</span></div>
           <div id="content_${bldgId}_${wingId}" class="collapsible-content">`;
-
         wingData.orders.sort((a, b) => (parseInt(a.flat) || 0) - (parseInt(b.flat) || 0));
         wingData.orders.forEach(order => {
-          const orderHtml = Object.keys(order.items).map(prodId => {
+          const orderHtml = Object.keys(order.items || {}).map(prodId => {
             const prod = productsData[prodId]; const qty = order.items[prodId];
             if (!prod || qty <= 0) return '';
-            return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color};color:#fff;font-size:13px;font-weight:700;margin:2px">${qty}</span>`;
+            return `<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${prod.color||'#6366f1'};color:#fff;font-size:13px;font-weight:700;margin:2px">${prod.name} ×${qty}</span>`;
           }).filter(Boolean).join(' ');
           html += `<div class="order-item" style="margin:8px 10px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong>🏠 Flat ${order.flat}</strong>${orderHtml}</div></div>`;
         });
@@ -1059,10 +1049,9 @@ const todayOrders = orders.filter(o => {
       });
       html += `</div></div>`;
     });
-
     document.getElementById('todayOrdersBuildings').innerHTML = html;
     showSync('success');
-  } catch(e) { showSync('error'); console.error(e); }
+  } catch(e) { showSync('error'); console.error(e); alert('Error: ' + e.message); }
 }
 
 // =============================================
