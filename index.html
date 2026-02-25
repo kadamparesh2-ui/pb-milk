@@ -979,6 +979,8 @@ function setupOrderListener() {
 async function loadAdminOrders() {
   try {
     showSync('syncing');
+      const freshProd = await withTimeout(db.ref('products').once('value'), 8000, 'Products timeout.');
+productsData = freshProd.val() || {};
     const ordersSnap = await withTimeout(db.ref('orders').once('value'), 10000, 'Orders load timeout.');
     const orders = [];
     ordersSnap.forEach(child => orders.push(child.val()));
