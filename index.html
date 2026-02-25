@@ -982,14 +982,17 @@ async function loadAdminOrders() {
     const ordersSnap = await withTimeout(db.ref('orders').once('value'), 10000, 'Orders load timeout.');
     const orders = [];
     ordersSnap.forEach(child => orders.push(child.val()));
-    const today = new Date().toDateString();
-    const todayOrders = orders.filter(o => {
+    const todayIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
+const today = todayIST.toDateString();
+const todayOrders = orders.filter(o => {
   if (o.date === today) return true;
   if (o.createdAt) {
-    return new Date(o.createdAt).toDateString() === today;
+    const orderDateIST = new Date(new Date(o.createdAt).getTime() + (5.5 * 60 * 60 * 1000));
+    return orderDateIST.toDateString() === today;
   }
   return false;
 });
+  
     if (todayOrders.length === 0) {
       document.getElementById('todayOrdersBuildings').innerHTML = '<div style="text-align:center;padding:40px;color:#999">📋 Aaj koi order nahi</div>';
       showSync('success'); return;
