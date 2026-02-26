@@ -986,6 +986,10 @@ async function loadAdminOrders() {
     ordersSnap.forEach(child => orders.push(child.val()));
     const today = new Date().toDateString();
 const todayOrders = orders.filter(o => o.date === today);
+      if (todayOrders.length === 0) {
+       document.getElementById('todayOrdersBuildings').innerHTML = '...';
+       showSync('success'); return;
+      }
     const buildingGroups = {};
     todayOrders.forEach(order => {
       const bldgId = order.buildingId || 'unknown';
