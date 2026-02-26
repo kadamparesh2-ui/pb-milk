@@ -1003,7 +1003,10 @@ const todayOrders = orders.filter(o => o.date === today);
         buildingGroups[bldgId].buildingTotals[prodId] = (buildingGroups[bldgId].buildingTotals[prodId] || 0) + qty;
       });
     });
-    let html = '';
+    let html = '';if (Object.keys(buildingGroups).length === 0) {
+  document.getElementById('todayOrdersBuildings').innerHTML = '<div style="text-align:center;padding:40px;color:#999">No buildings found</div>';
+  showSync('success'); return;
+    }
     Object.keys(buildingGroups).forEach(bldgId => {
       const bldgData = buildingGroups[bldgId];
       const totalOrders = Object.values(bldgData.wings).reduce((sum, w) => sum + w.orders.length, 0);
