@@ -472,7 +472,7 @@ async function loadCustomerDashboard(){
     document.getElementById('custName').textContent=currentUser.data.name;
     document.getElementById('custAddr').textContent=currentUser.data.building+' - '+currentUser.data.wing+' - Flat '+currentUser.data.flat;
     let th='<div class="token-grid">',hasT=false;
-    Object.keys(productsData).forEach(pid=>{const p=productsData[pid],tc=currentUser.data.tokens[pid]||0;if(tc>0)hasT=true;th+=`<div class="token-card" style="border-color:${p.color||'#6b7280'}"><div class="token-icon">${p.icon}</div><div class="token-count" style="color:${p.color||'#6b7280'}">${tc}</div><div class="token-name">${p.name}</div></div>`;});
+    Object.keys(productsData).forEach(pid=>{const p=productsData[pid];if(!p)return;const tc=currentUser.data.tokens?.[pid]||0;if(tc>0)hasT=true;th+=`<div class="token-card" style="border-color:${p.color||'#6b7280'}"><div class="token-icon">${p.icon}</div><div class="token-count" style="color:${p.color||'#6b7280'}">${tc}</div><div class="token-name">${p.name}</div></div>`;});
     th+='</div>';
     if(!hasT)th='<div class="alert alert-warning">⚠️ Koi token nahi. Admin se tokens add karwao.</div>';
     document.getElementById('tokenBalance').innerHTML=th;
@@ -482,13 +482,13 @@ async function loadCustomerDashboard(){
 
 function displayOrderProducts(){
   let html='',hasA=false;
-  Object.keys(productsData).forEach(pid=>{const p=productsData[pid],av=currentUser.data.tokens[pid]||0;if(av>0&&p.active){hasA=true;html+=`<div class="product-card"><div class="flex"><div><strong>${p.icon} ${p.name}</strong><br><small>₹${p.price}/pkt • ${av} tokens</small></div><input type="number" id="qty_${pid}" min="0" max="${av}" value="0" style="width:70px;padding:8px;border-radius:8px;border:2px solid #e5e7eb;text-align:center;font-weight:700" oninput="updateOrderSummary()"></div></div>`;}});
+  Object.keys(productsData).forEach(pid=>{const p=productsData[pid];if(!p)return;const av=currentUser.data.tokens?.[pid]||0;if(av>0&&p.active){hasA=true;html+=`<div class="product-card"><div class="flex"><div><strong>${p.icon} ${p.name}</strong><br><small>₹${p.price}/pkt • ${av} tokens</small></div><input type="number" id="qty_${pid}" min="0" max="${av}" value="0" style="width:70px;padding:8px;border-radius:8px;border:2px solid #e5e7eb;text-align:center;font-weight:700" oninput="updateOrderSummary()"></div></div>`;}});
   if(!hasA)html='<div class="alert alert-warning">⚠️ Tokens nahi hain.</div>';
   document.getElementById('productsList').innerHTML=html;
 }
 
 function updateOrderSummary(){
-  let tq=0,ta=0;Object.keys(productsData).forEach(pid=>{const inp=document.getElementById('qty_'+pid);if(inp){const q=parseInt(inp.value)||0;tq+=q;ta+=q*productsData[pid].price;}});
+  let tq=0,ta=0;Object.keys(productsData).forEach(pid=>{const inp=document.getElementById('qty_'+pid);if(inp&&productsData[pid]){const q=parseInt(inp.value)||0;tq+=q;ta+=q*productsData[pid].price;}});
   const sd=document.getElementById('orderSummary');
   if(tq>0){sd.classList.remove('hide');sd.innerHTML=`<div style="background:#d1fae5;padding:15px;border-radius:10px;margin:10px 0"><div class="flex" style="margin-bottom:5px"><strong>Total Packets:</strong><strong>${tq}</strong></div><div class="flex"><strong>Total Amount:</strong><strong style="color:#10b981;font-size:18px">₹${ta}</strong></div></div>`;}
   else sd.classList.add('hide');
@@ -496,7 +496,7 @@ function updateOrderSummary(){
 
 async function placeOrder(){
   let oi={},tq=0,ta=0,errs=[];
-  Object.keys(productsData).forEach(pid=>{const inp=document.getElementById('qty_'+pid);if(inp){const q=parseInt(inp.value)||0,av=currentUser.data.tokens[pid]||0;if(q>0){if(q>av){errs.push(`${productsData[pid].name}: Only ${av} tokens`);return;}oi[pid]=q;tq+=q;ta+=q*productsData[pid].price;}}});
+  Object.keys(productsData).forEach(pid=>{const inp=document.getElementById('qty_'+pid);if(inp&&productsData[pid]){const q=parseInt(inp.value)||0,av=currentUser.data.tokens?.[pid]||0;if(q>0){if(q>av){errs.push(`${productsData[pid].name}: Only ${av} tokens`);return;}oi[pid]=q;tq+=q;ta+=q*productsData[pid].price;}}});
   if(errs.length>0){alert('⚠️ Order Error!\n\n'+errs.join('\n'));return;}
   if(tq===0){alert('⚠️ Kam se kam 1 product select karo!');return;}
   if(!confirm(`📦 Order Confirm?\n\nTotal: ${tq} packets\nAmount: ₹${ta}`))return;
@@ -596,22 +596,106 @@ function adminTab(evt,t){
 async function loadAdminOrders(){
   try{
     showSync('syncing');
-    const fp=await withTimeout(db.ref('products').once('value'),8000,'Timeout.');productsData=fp.val()||{};
+    const fp=await withTimeout(db.ref('products').once('value'),8000,'Timeout.');
+    productsData=fp.val()||{};
     const os=await withTimeout(db.ref('orders').once('value'),10000,'Timeout.');
     const orders=[];os.forEach(c=>orders.push(c.val()));
-    const today=getISTDateString(),to=orders.filter(o=>o.date===today);
-    if(to.length===0){document.getElementById('todayOrdersBuildings').innerHTML='<div style="text-align:center;padding:30px;color:#999">Aaj koi order nahi</div>';showSync('success');return;}
+    const today=getISTDateString();
+    const to=orders.filter(o=>o.date===today);
+
+    if(to.length===0){
+      document.getElementById('todayOrdersBuildings').innerHTML=
+        '<div style="text-align:center;padding:30px;color:#999">Aaj koi order nahi</div>';
+      showSync('success');return;
+    }
+
+    // Color circle symbol — product name nahi sirf ● color + qty
+    function colorSymbol(pid,qty){
+      const p=productsData[pid];
+      if(!p||qty<=0)return'';
+      return`<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;background:${p.color||'#6366f1'};color:#fff;font-size:13px;font-weight:800;margin:2px">●&nbsp;×${qty}</span>`;
+    }
+
+    // Group: building → wing → orders
     const bg={};
-    to.forEach(o=>{const bid=o.buildingId||'unknown';if(!bg[bid])bg[bid]={buildingName:o.building||'Unknown',wings:{},buildingTotals:{}};const wid=o.wingId||'unknown';if(!bg[bid].wings[wid])bg[bid].wings[wid]={wingName:o.wing||'Unknown',orders:[],wingTotals:{}};bg[bid].wings[wid].orders.push(o);Object.keys(o.items||{}).forEach(pid=>{const q=o.items[pid];bg[bid].wings[wid].wingTotals[pid]=(bg[bid].wings[wid].wingTotals[pid]||0)+q;bg[bid].buildingTotals[pid]=(bg[bid].buildingTotals[pid]||0)+q;});});
+    to.forEach(o=>{
+      const bid=o.buildingId||o.building||'unknown';
+      const wid=(o.wingId||'')+'_'+(o.wing||'unknown');
+      if(!bg[bid])bg[bid]={buildingName:o.building||'Unknown',wings:{},buildingTotals:{}};
+      if(!bg[bid].wings[wid])bg[bid].wings[wid]={wingName:o.wing||'Unknown',orders:[],wingTotals:{}};
+      bg[bid].wings[wid].orders.push(o);
+      // Wing totals + Building totals
+      Object.keys(o.items||{}).forEach(pid=>{
+        const q=o.items[pid];
+        bg[bid].wings[wid].wingTotals[pid]=(bg[bid].wings[wid].wingTotals[pid]||0)+q;
+        bg[bid].buildingTotals[pid]=(bg[bid].buildingTotals[pid]||0)+q;
+      });
+    });
+
     let html='';
-    Object.keys(bg).forEach(bid=>{const bd=bg[bid],tot=Object.values(bd.wings).reduce((s,w)=>s+w.orders.length,0);const bth=Object.keys(bd.buildingTotals).map(pid=>{const p=productsData[pid],q=bd.buildingTotals[pid];if(!p||q<=0)return'';return`<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${p.color||'#6366f1'};color:#fff;font-size:12px;font-weight:700;margin:2px">${p.name} ${q}</span>`;}).filter(Boolean).join(' ');
-    html+=`<div class="building-card" style="margin-bottom:15px"><div class="building-header" onclick="toggleBuilding('${bid}')"><div style="flex:1"><strong style="font-size:16px">🏢 ${bd.buildingName}</strong><small style="display:block;margin:2px 0">${tot} orders</small><div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${bth||'<small style="opacity:0.7">No items</small>'}</div></div><span id="arrow_${bid}" style="font-size:18px">▼</span></div><div id="content_${bid}" class="collapsible-content">`;
-    Object.keys(bd.wings).forEach(wid=>{const wd=bd.wings[wid];const wth=Object.keys(wd.wingTotals).map(pid=>{const p=productsData[pid],q=wd.wingTotals[pid];if(!p||q<=0)return'';return`<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${p.color||'#6366f1'};color:#fff;font-size:12px;font-weight:700;margin:2px">${p.name} ${q}</span>`;}).filter(Boolean).join(' ');
-    html+=`<div class="wing-card" onclick="toggleWing('${bid}_${wid}')"><div class="wing-header"><div style="flex:1"><strong>📍 ${wd.wingName}</strong><small style="display:block;margin:2px 0">${wd.orders.length} orders</small><div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${wth}</div></div><span id="arrow_${bid}_${wid}">▶</span></div><div id="content_${bid}_${wid}" class="collapsible-content">`;
-    wd.orders.sort((a,b)=>(parseInt(a.flat)||0)-(parseInt(b.flat)||0));
-    wd.orders.forEach(o=>{const oh=Object.keys(o.items||{}).map(pid=>{const p=productsData[pid],q=o.items[pid];if(!p||q<=0)return'';return`<span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${p.color||'#6366f1'};color:#fff;font-size:13px;font-weight:700;margin:2px">${p.name} ×${q}</span>`;}).filter(Boolean).join(' ');html+=`<div class="order-item" style="margin:8px 10px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong>🏠 Flat ${o.flat}</strong>${oh}</div></div>`;});
-    html+=`</div></div>`;});html+=`</div></div>`;});
-    document.getElementById('todayOrdersBuildings').innerHTML=html;showSync('success');
+    Object.keys(bg).forEach(bid=>{
+      const bd=bg[bid];
+      const totalOrders=Object.values(bd.wings).reduce((s,w)=>s+w.orders.length,0);
+
+      // Building level — color symbols (total of all wings)
+      const bSymbols=Object.keys(bd.buildingTotals)
+        .map(pid=>colorSymbol(pid,bd.buildingTotals[pid]))
+        .filter(Boolean).join('');
+
+      html+=`<div class="building-card" style="margin-bottom:15px">
+        <div class="building-header" onclick="toggleBuilding('${bid}')">
+          <div style="flex:1">
+            <strong style="font-size:16px">🏢 ${bd.buildingName}</strong>
+            <small style="display:block;margin:3px 0;opacity:0.9">${totalOrders} orders</small>
+            <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${bSymbols||'<small style="opacity:0.7">No items</small>'}</div>
+          </div>
+          <span id="arrow_${bid}" style="font-size:20px;margin-left:10px">▼</span>
+        </div>
+        <div id="content_${bid}" class="collapsible-content">`;
+
+      // Wing level
+      Object.keys(bd.wings).forEach(wid=>{
+        const wd=bd.wings[wid];
+
+        // Wing color symbols (total of this wing)
+        const wSymbols=Object.keys(wd.wingTotals)
+          .map(pid=>colorSymbol(pid,wd.wingTotals[pid]))
+          .filter(Boolean).join('');
+
+        html+=`<div class="wing-card" onclick="toggleWing('${bid}_${wid}')">
+          <div class="wing-header">
+            <div style="flex:1">
+              <strong>📍 ${wd.wingName}</strong>
+              <small style="display:block;margin:2px 0;color:#6b7280">${wd.orders.length} orders</small>
+              <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px">${wSymbols}</div>
+            </div>
+            <span id="arrow_${bid}_${wid}" style="font-size:16px">▶</span>
+          </div>
+          <div id="content_${bid}_${wid}" class="collapsible-content">`;
+
+        // Customer / Flat level — sort by flat number
+        wd.orders.sort((a,b)=>(parseInt(a.flat)||0)-(parseInt(b.flat)||0));
+        wd.orders.forEach(o=>{
+          // Flat level color symbols
+          const fSymbols=Object.keys(o.items||{})
+            .map(pid=>colorSymbol(pid,o.items[pid]))
+            .filter(Boolean).join('');
+          html+=`<div class="order-item" style="margin:8px 12px;padding:12px">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+              <strong style="font-size:14px">🏠 Flat ${o.flat}</strong>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;width:100%">${fSymbols}</div>
+            </div>
+          </div>`;
+        });
+
+        html+=`</div></div>`;
+      });
+
+      html+=`</div></div>`;
+    });
+
+    document.getElementById('todayOrdersBuildings').innerHTML=html;
+    showSync('success');
   }catch(e){showSync('error');alert('Error: '+e.message);}
 }
 
@@ -845,8 +929,16 @@ async function loadCustomerNotification(){
     for(const n of notifs){
       if(!n.active)continue;
       if(n.type==='all'){latestNotif=n;break;}
-      if(n.type==='building'&&n.buildingId===cust.buildingId){latestNotif=n;break;}
-      if(n.type==='wing'&&n.buildingId===cust.buildingId&&n.wingId===cust.wingId){latestNotif=n;break;}
+      // building match - ID se ya name se
+      if(n.type==='building'){
+        if(n.buildingId===cust.buildingId||n.buildingId===cust.building){latestNotif=n;break;}
+      }
+      // wing match - ID se ya name se
+      if(n.type==='wing'){
+        const bMatch=n.buildingId===cust.buildingId||n.buildingId===cust.building;
+        const wMatch=n.wingId===cust.wingId||n.wingId===cust.wing;
+        if(bMatch&&wMatch){latestNotif=n;break;}
+      }
     }
     if(latestNotif){
       const dt=new Date(latestNotif.sentAt);
