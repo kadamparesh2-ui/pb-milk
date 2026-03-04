@@ -601,7 +601,8 @@ async function loadAdminOrders(){
     const os=await withTimeout(db.ref('orders').once('value'),10000,'Timeout.');
     const orders=[];os.forEach(c=>orders.push(c.val()));
     const today=getISTDateString();
-    const to=orders.filter(o=>o.date===today);
+    const todayAlt=new Date().toDateString(); // purane orders ke liye
+    const to=orders.filter(o=>o.date===today||o.date===todayAlt);
 
     if(to.length===0){
       document.getElementById('todayOrdersBuildings').innerHTML=
@@ -610,10 +611,20 @@ async function loadAdminOrders(){
     }
 
     // Color circle symbol — product name nahi sirf ● color + qty
+    // Product colors fallback list
+    const fallbackColors=['#ef4444','#fbbf24','#1e3a8a','#10b981','#1f2937','#8b5cf6','#f97316','#06b6d4'];
+    let colorIdx=0;
+    const pidColorMap={};
+    Object.keys(productsData).forEach(pid=>{
+      const p=productsData[pid];
+      if(!pidColorMap[pid]) pidColorMap[pid]=p?.color||(fallbackColors[colorIdx++%fallbackColors.length]);
+    });
+
     function colorSymbol(pid,qty){
       const p=productsData[pid];
       if(!p||qty<=0)return'';
-      return`<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;background:${p.color||'#6366f1'};color:#fff;font-size:13px;font-weight:800;margin:2px">●&nbsp;×${qty}</span>`;
+      const bgColor=pidColorMap[pid]||p.color||'#6366f1';
+      return`<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;background:${bgColor};color:#fff;font-size:13px;font-weight:800;margin:2px">●&nbsp;×${qty}</span>`;
     }
 
     // Group: building → wing → orders
