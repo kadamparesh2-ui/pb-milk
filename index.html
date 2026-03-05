@@ -224,6 +224,7 @@ input:checked + .toggle-slider:before{transform:translateX(26px)}
       <button class="nav-btn" onclick="adminTab(event,'buildings')">🏢 Buildings</button>
       <button class="nav-btn" onclick="adminTab(event,'products')">📦 Products</button>
       <button class="nav-btn" onclick="adminTab(event,'notif')">🔔 Notifications</button>
+      <button class="nav-btn" onclick="adminTab(event,'lowtokens')">⚠️ Low Tokens</button>
       <button class="nav-btn" onclick="adminTab(event,'settings')">⚙️ Settings</button>
     </div>
     <div id="adminDash">
@@ -309,6 +310,17 @@ input:checked + .toggle-slider:before{transform:translateX(26px)}
         <div id="notifHistory"><div style="text-align:center;padding:20px;color:#999">Koi notification nahi</div></div>
       </div>
     </div>
+    <div id="adminLowTokens" class="hide">
+      <div class="card">
+        <div class="flex" style="margin-bottom:15px">
+          <h3>⚠️ Low Token Alerts</h3>
+          <button class="btn btn-sm btn-primary" onclick="loadLowTokens()">🔄 Refresh</button>
+        </div>
+        <div class="alert alert-warning">5 se kam tokens wale customers</div>
+        <div id="lowTokensList"><div style="text-align:center;padding:20px;color:#999">Loading...</div></div>
+      </div>
+    </div>
+
     <div id="adminSettings" class="hide">
       <div class="card">
         <h3>🔐 Change Admin Credentials</h3>
@@ -423,7 +435,10 @@ async function submitRegistration(){
     if(ex.val()){showSync('error');alert('❌ Ye mobile number already registered hai!');return;}
     const bs=await withTimeout(db.ref('buildings/'+bId).once('value'),8000,'Timeout.');
     const bldg=bs.val();
-    const defTok={};Object.keys(productsData).forEach(pid=>{defTok[pid]=0;});
+    // Registration time pe fresh products load karo
+    const prodSnap=await withTimeout(db.ref('products').once('value'),8000,'Timeout.');
+    const freshProds=prodSnap.val()||{};
+    const defTok={};Object.keys(freshProds).forEach(pid=>{defTok[pid]=0;});
     const cust={phone,name,buildingId:bId,building:bldg.name,wingId:wId,wing:bldg.wings[wId].name,flat,pass,tokens:defTok,createdAt:new Date().toISOString(),status:'active'};
     await withTimeout(auth.createUserWithEmailAndPassword(phone+'@pbmilk.app',pass),15000,'Timeout.');
     await withTimeout(db.ref('customers/'+phone).set(cust),8000,'Timeout.');
@@ -547,7 +562,7 @@ async function loadDashboard(){
 
     const today=getISTDateString();
     let todayOrders=0,todayPackets=0,todayRevenue=0;
-    os.forEach(child=>{const o=child.val();if(o.date===today){todayOrders++;todayPackets+=o.totalQuantity||0;todayRevenue+=o.totalAmount||0;}});
+    os.forEach(child=>{const o=child.val();if(o.date===today&&o.items&&Object.keys(o.items).length>0){todayOrders++;todayPackets+=o.totalQuantity||0;todayRevenue+=o.totalAmount||0;}});
 
     document.getElementById('statCust').textContent=custCount;
     document.getElementById('statOrders').textContent=todayOrders;
@@ -577,7 +592,7 @@ async function updateDashboardStats(){
     cs.forEach(child=>{const v=child.val();if(v&&v.phone)custCount++;});
     const today=getISTDateString();
     let todayOrders=0,todayPackets=0,todayRevenue=0;
-    os.forEach(child=>{const o=child.val();if(o.date===today){todayOrders++;todayPackets+=o.totalQuantity||0;todayRevenue+=o.totalAmount||0;}});
+    os.forEach(child=>{const o=child.val();if(o.date===today&&o.items&&Object.keys(o.items).length>0){todayOrders++;todayPackets+=o.totalQuantity||0;todayRevenue+=o.totalAmount||0;}});
     document.getElementById('statCust').textContent=custCount;
     document.getElementById('statOrders').textContent=todayOrders;
     document.getElementById('statPackets').textContent=todayPackets;
@@ -587,10 +602,10 @@ async function updateDashboardStats(){
 
 function adminTab(evt,t){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));evt.currentTarget.classList.add('active');
-  ['adminDash','adminOrders','adminCustomers','adminBuildings','adminProducts','adminNotif','adminSettings'].forEach(id=>document.getElementById(id).classList.add('hide'));
-  const m={dash:'adminDash',orders:'adminOrders',customers:'adminCustomers',buildings:'adminBuildings',products:'adminProducts',notif:'adminNotif',settings:'adminSettings'};
+  ['adminDash','adminOrders','adminCustomers','adminBuildings','adminProducts','adminNotif','adminLowTokens','adminSettings'].forEach(id=>document.getElementById(id).classList.add('hide'));
+  const m={dash:'adminDash',orders:'adminOrders',customers:'adminCustomers',buildings:'adminBuildings',products:'adminProducts',notif:'adminNotif',lowtokens:'adminLowTokens',settings:'adminSettings'};
   if(m[t])document.getElementById(m[t]).classList.remove('hide');
-  switch(t){case 'dash':loadDashboard();break;case 'orders':loadAdminOrders();break;case 'customers':loadAdminCustomers();break;case 'buildings':loadAdminBuildings();break;case 'products':loadAdminProducts();break;case 'notif':loadNotifPanel();break;case 'settings':loadAdminSettings();break;}
+  switch(t){case 'dash':loadDashboard();break;case 'orders':loadAdminOrders();break;case 'customers':loadAdminCustomers();break;case 'buildings':loadAdminBuildings();break;case 'products':loadAdminProducts();break;case 'notif':loadNotifPanel();break;case 'lowtokens':loadLowTokens();break;case 'settings':loadAdminSettings();break;}
 }
 
 async function loadAdminOrders(){
@@ -601,8 +616,7 @@ async function loadAdminOrders(){
     const os=await withTimeout(db.ref('orders').once('value'),10000,'Timeout.');
     const orders=[];os.forEach(c=>orders.push(c.val()));
     const today=getISTDateString();
-    const todayAlt=new Date().toDateString(); // purane orders ke liye
-    const to=orders.filter(o=>o.date===today||o.date===todayAlt);
+    const to=orders.filter(o=>o.date===today&&o.items&&Object.keys(o.items).length>0);
 
     if(to.length===0){
       document.getElementById('todayOrdersBuildings').innerHTML=
@@ -754,7 +768,7 @@ async function loadAdminCustomers(){
     wd.customers.sort((a,b)=>(parseInt(a.flat)||0)-(parseInt(b.flat)||0)).forEach(c=>{
       let th='';Object.keys(productsData).forEach(pid=>{const cnt=c.tokens?(c.tokens[pid]||0):0;if(cnt>0){const p=productsData[pid];th+=`<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:12px;background:${p.color};color:#fff;font-size:12px;font-weight:700">${p.icon} ${p.name}: ${cnt}</span>`;}});
       if(!th)th='<small style="color:#999">No tokens</small>';
-      html+=`<div class="order-item" style="margin:8px 10px"><div class="flex" style="align-items:flex-start"><div style="flex:1"><div style="margin-bottom:5px"><strong>🏠 Flat ${c.flat}</strong> &nbsp;<strong style="color:#6366f1">${c.name}</strong> &nbsp;<small style="color:#6b7280">📱 ${c.phone}</small></div><div style="display:flex;flex-wrap:wrap;gap:4px">${th}</div></div><div style="display:flex;flex-direction:column;gap:5px;margin-left:10px"><button class="btn btn-sm btn-success" onclick="event.stopPropagation();showAddTokenModal('${c.phone}')">💰 Tokens</button><button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteCustomer('${c.phone}')">🗑️ Delete</button></div></div></div>`;
+      html+=`<div class="order-item" style="margin:8px 10px"><div class="flex" style="align-items:flex-start"><div style="flex:1"><div style="margin-bottom:5px"><strong>🏠 Flat ${c.flat}</strong> &nbsp;<strong style="color:#6366f1">${c.name}</strong> &nbsp;<small style="color:#6b7280">📱 ${c.phone}</small></div><div style="display:flex;flex-wrap:wrap;gap:4px">${th}</div></div><div style="display:flex;flex-direction:column;gap:5px;margin-left:10px"><button class="btn btn-sm btn-success" onclick="event.stopPropagation();showAddTokenModal('${c.phone}')">💰 Tokens</button><button class="btn btn-sm btn-primary" onclick="event.stopPropagation();showAdminPlaceOrder('${c.phone}')">🛒 Order</button><button class="btn btn-sm" style="background:#8b5cf6;color:#fff" onclick="event.stopPropagation();showCustomerOrderHistory('${c.phone}')">📋 History</button><button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteCustomer('${c.phone}')">🗑️ Delete</button></div></div></div>`;
     });html+=`</div></div>`;});html+=`</div></div>`;});
     document.getElementById('customersList').innerHTML=html;showSync('success');
   }catch(e){showSync('error');console.error(e);}
@@ -992,7 +1006,178 @@ async function saveNotificationSettings(){try{await withTimeout(db.ref('settings
 async function shareApp(){try{const h=document.documentElement.outerHTML,b=new Blob([h],{type:'text/html'}),f=new File([b],'PB-Milk-App.html',{type:'text/html'});if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({title:'PB Milk App',text:'🥛 PB Milk',files:[f]});else downloadAppFile(h);}catch(e){downloadAppFile(document.documentElement.outerHTML);}}
 function downloadAppFile(h){const b=new Blob([h],{type:'text/html'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='PB-Milk-App.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);alert('✅ App download ho gayi!');}
 
-// ✅ FIX 2: Logout mein listener properly clean karo
+// ============================
+// ADMIN - CUSTOMER KE LIYE ORDER
+// ============================
+async function showAdminPlaceOrder(phone){
+  const ex=document.getElementById('adminOrderModal');if(ex)ex.remove();
+  const cust=customersCache[phone];if(!cust){alert('Customer nahi mila!');return;}
+  const modal=document.createElement('div');modal.id='adminOrderModal';modal.className='token-modal-overlay';
+  modal.innerHTML=`<div class="token-modal-box">
+    <div class="token-modal-header"><h3>🛒 Place Order</h3><p>${cust.name} - ${cust.building} - ${cust.wing} - Flat ${cust.flat}</p></div>
+    <div id="adminOrderBody" class="token-loading"><div style="font-size:30px;margin-bottom:10px">⏳</div>Loading...</div>
+    <div style="margin-top:15px">
+      <button onclick="submitAdminOrder('${phone}')" class="btn btn-success">✅ Place Order</button>
+      <button onclick="document.getElementById('adminOrderModal').remove()" class="btn" style="background:#6b7280;color:#fff">❌ Cancel</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+  try{
+    const fp=await withTimeout(db.ref('products').once('value'),8000,'Timeout.');
+    productsData=fp.val()||{};
+    const tokens=cust.tokens||{};
+    let html='<p style="font-size:12px;color:#6b7280;margin-bottom:10px">Quantity select karo (available tokens ke andar)</p>';
+    let hasTokens=false;
+    Object.keys(productsData).forEach(pid=>{
+      const p=productsData[pid];const av=tokens[pid]||0;
+      if(av>0&&p.active){hasTokens=true;
+        html+=`<div class="token-row"><div class="token-row-left"><strong>${p.icon} ${p.name}</strong><small>₹${p.price}/pkt • <b style="color:${p.color}">${av}</b> tokens</small></div><input type="number" id="aord_${pid}" class="token-qty-input" min="0" max="${av}" value="0"></div>`;
+      }
+    });
+    if(!hasTokens)html='<div class="alert alert-warning">⚠️ Is customer ke paas koi token nahi!</div>';
+    document.getElementById('adminOrderBody').innerHTML=html;
+  }catch(e){document.getElementById('adminOrderBody').innerHTML=`<div class="alert alert-danger">❌ Error: ${e.message}</div>`;}
+}
+
+async function submitAdminOrder(phone){
+  const cust=customersCache[phone];if(!cust){alert('Customer nahi mila!');return;}
+  let oi={},tq=0,ta=0,errs=[];
+  Object.keys(productsData).forEach(pid=>{
+    const inp=document.getElementById('aord_'+pid);
+    if(inp&&productsData[pid]){const q=parseInt(inp.value)||0,av=cust.tokens?.[pid]||0;
+      if(q>0){if(q>av){errs.push(`${productsData[pid].name}: Only ${av} tokens`);return;}oi[pid]=q;tq+=q;ta+=q*productsData[pid].price;}
+    }
+  });
+  if(errs.length>0){alert('⚠️ Error!\n\n'+errs.join('\n'));return;}
+  if(tq===0){alert('⚠️ Kam se kam 1 product select karo!');return;}
+  if(!confirm(`📦 ${cust.name} ke liye order?\n\n${tq} packets\n₹${ta}`))return;
+  try{
+    showSync('syncing');
+    const nt={...cust.tokens};Object.keys(oi).forEach(pid=>{nt[pid]=(nt[pid]||0)-oi[pid];if(nt[pid]<0)nt[pid]=0;});
+    await withTimeout(db.ref('customers/'+phone+'/tokens').set(nt),8000,'Timeout.');
+    const oid='ord_'+Date.now();
+    await withTimeout(db.ref('orders/'+oid).set({id:oid,customerId:phone,customerName:cust.name,buildingId:cust.buildingId,building:cust.building,wingId:cust.wingId,wing:cust.wing,flat:cust.flat,items:oi,totalQuantity:tq,totalAmount:ta,status:'pending',createdAt:new Date().toISOString(),date:getISTDateString(),placedByAdmin:true}),8000,'Timeout.');
+    customersCache[phone].tokens=nt;
+    showSync('success');document.getElementById('adminOrderModal').remove();
+    alert(`✅ Order Place Ho Gaya!\n\n${cust.name}\n${tq} packets • ₹${ta}`);
+    loadAdminCustomers();
+  }catch(e){showSync('error');alert('❌ Error: '+e.message);}
+}
+
+// ============================
+// ADMIN - CUSTOMER ORDER HISTORY
+// ============================
+async function showCustomerOrderHistory(phone){
+  const ex=document.getElementById('historyModal');if(ex)ex.remove();
+  const cust=customersCache[phone];if(!cust){alert('Customer nahi mila!');return;}
+  const modal=document.createElement('div');modal.id='historyModal';modal.className='token-modal-overlay';
+  modal.innerHTML=`<div class="token-modal-box">
+    <div class="token-modal-header"><h3>📋 Order History</h3><p>${cust.name} - ${cust.building} - ${cust.wing} - Flat ${cust.flat}</p></div>
+    <div id="historyBody" class="token-loading"><div style="font-size:30px;margin-bottom:10px">⏳</div>Loading...</div>
+    <button onclick="document.getElementById('historyModal').remove()" class="btn" style="background:#6b7280;color:#fff;margin-top:10px">✕ Close</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+  try{
+    const fp=await withTimeout(db.ref('products').once('value'),8000,'Timeout.');productsData=fp.val()||{};
+    const s=await withTimeout(db.ref('orders').orderByChild('customerId').equalTo(phone).once('value'),8000,'Timeout.');
+    const orders=[];s.forEach(c=>orders.push(c.val()));
+    if(orders.length===0){document.getElementById('historyBody').innerHTML='<div style="text-align:center;padding:20px;color:#999">Koi order nahi</div>';return;}
+    orders.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+    let html='';
+    orders.forEach(o=>{
+      const dt=new Date(o.createdAt);
+      let ih='';Object.keys(o.items||{}).forEach(pid=>{const p=productsData[pid];if(p)ih+=`<span style="display:inline-block;padding:2px 8px;margin:2px;border-radius:10px;background:${p.color};color:#fff;font-size:12px">${p.icon} ${p.name} ×${o.items[pid]}</span>`;});
+      const adminBadge=o.placedByAdmin?'<span class="badge badge-warning" style="font-size:10px">Admin</span>':'';
+      html+=`<div class="order-item" style="margin-bottom:10px">
+        <div class="flex"><small style="color:#6b7280">${dt.toLocaleDateString()} ${dt.toLocaleTimeString()}</small>${adminBadge}</div>
+        <div style="margin:6px 0;display:flex;flex-wrap:wrap;gap:4px">${ih||'<small style="color:#999">No items</small>'}</div>
+        <div class="flex"><strong>${o.totalQuantity} packets</strong><strong style="color:#10b981">₹${o.totalAmount}</strong></div>
+      </div>`;
+    });
+    document.getElementById('historyBody').innerHTML=html;
+  }catch(e){document.getElementById('historyBody').innerHTML=`<div class="alert alert-danger">❌ Error: ${e.message}</div>`;}
+}
+
+// ============================
+// LOW TOKENS TAB
+// ============================
+async function loadLowTokens(){
+  const LOW=5;
+  try{
+    showSync('syncing');
+    const [cs,ps]=await Promise.all([
+      withTimeout(db.ref('customers').once('value'),10000,'Timeout.'),
+      withTimeout(db.ref('products').once('value'),8000,'Timeout.')
+    ]);
+    productsData=ps.val()||{};
+    const customers=[];cs.forEach(c=>{const v=c.val();if(v&&v.phone)customers.push(v);});
+
+    // Low token customers dhundo
+    const lowCusts=customers.filter(c=>{
+      return Object.keys(productsData).some(pid=>(c.tokens?.[pid]||0)<LOW&&(c.tokens?.[pid]||0)>=0);
+    });
+
+    if(lowCusts.length===0){
+      document.getElementById('lowTokensList').innerHTML='<div style="text-align:center;padding:30px;color:#10b981;font-size:16px">✅ Sabhi customers ke tokens theek hain!</div>';
+      showSync('success');return;
+    }
+
+    // Building → Wing wise group karo
+    const bg={};
+    lowCusts.forEach(c=>{
+      const bid=c.buildingId||'unknown';
+      const wid=c.wingId||'unknown';
+      if(!bg[bid])bg[bid]={buildingName:c.building||'Unknown',wings:{}};
+      if(!bg[bid].wings[wid])bg[bid].wings[wid]={wingName:c.wing||'Unknown',customers:[]};
+      bg[bid].wings[wid].customers.push(c);
+    });
+
+    let html='';
+    Object.keys(bg).forEach(bid=>{
+      const bd=bg[bid];
+      html+=`<div class="building-card" style="margin-bottom:15px">
+        <div class="building-header" onclick="this.nextElementSibling.classList.toggle('open')">
+          <strong>🏢 ${bd.buildingName}</strong>
+          <span>▼</span>
+        </div>
+        <div class="collapsible-content open">`;
+
+      Object.keys(bd.wings).forEach(wid=>{
+        const wd=bd.wings[wid];
+        html+=`<div style="padding:10px">
+          <div style="font-weight:700;color:#6366f1;margin-bottom:8px">📍 ${wd.wingName}</div>`;
+
+        wd.customers.sort((a,b)=>(parseInt(a.flat)||0)-(parseInt(b.flat)||0)).forEach(c=>{
+          let lowItems='';
+          Object.keys(productsData).forEach(pid=>{
+            const cnt=c.tokens?.[pid]||0;
+            const p=productsData[pid];
+            if(cnt<LOW){
+              const color=cnt===0?'#ef4444':cnt<=2?'#f59e0b':'#f97316';
+              lowItems+=`<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:10px;background:${color};color:#fff;font-size:12px;font-weight:700">${p.icon} ${p.name}: ${cnt} ⚠️</span>`;
+            }
+          });
+          html+=`<div class="order-item" style="margin:6px 0">
+            <div style="margin-bottom:6px"><strong>🏠 Flat ${c.flat}</strong> &nbsp;<strong style="color:#6366f1">${c.name}</strong> &nbsp;<small style="color:#6b7280">📱 ${c.phone}</small></div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px">${lowItems}</div>
+            <button class="btn btn-sm btn-success" style="margin-top:8px" onclick="showAddTokenModal('${c.phone}')">💰 Add Tokens</button>
+          </div>`;
+        });
+        html+=`</div>`;
+      });
+      html+=`</div></div>`;
+    });
+
+    document.getElementById('lowTokensList').innerHTML=html;
+    showSync('success');
+  }catch(e){showSync('error');console.error(e);}
+}
+
+// ============================
+// LOGOUT
+// ============================
 async function logout(){
   if(!confirm('⚠️ Logout karein?'))return;
   if(dashboardListener){dashboardListener.off();dashboardListener=null;}
