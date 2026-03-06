@@ -225,6 +225,9 @@ input:checked + .toggle-slider:before{transform:translateX(26px)}
       <button class="nav-btn" onclick="adminTab(event,'products')">📦 Products</button>
       <button class="nav-btn" onclick="adminTab(event,'notif')">🔔 Notifications</button>
       <button class="nav-btn" onclick="adminTab(event,'lowtokens')">⚠️ Low Tokens</button>
+      <button class="nav-btn" onclick="adminTab(event,'tokenhistory')">🎫 Tokens</button>
+      <button class="nav-btn" onclick="adminTab(event,'dailyreport')">📊 Daily</button>
+      <button class="nav-btn" onclick="adminTab(event,'monthlyreport')">📅 Monthly</button>
       <button class="nav-btn" onclick="adminTab(event,'settings')">⚙️ Settings</button>
     </div>
     <div id="adminDash">
@@ -270,6 +273,20 @@ input:checked + .toggle-slider:before{transform:translateX(26px)}
       </div>
     </div>
     <div id="adminNotif" class="hide">
+      <!-- HOLIDAY MODE -->
+      <div class="card" id="holidayModeCard">
+        <h3>🏖️ Holiday Mode</h3>
+        <div id="holidayStatus" class="alert alert-success">✅ Delivery Chal Rahi Hai</div>
+        <p style="font-size:13px;color:#6b7280;margin-bottom:10px">Holiday ON karne se sabhi customers ko notification jayegi aur order band ho jayega.</p>
+        <div id="holidayDatePicker">
+          <label style="display:block;margin:8px 0 4px;font-weight:600;font-size:13px">📅 From Date:</label>
+          <input type="date" id="holidayFromDate" class="input" style="margin:4px 0">
+          <label style="display:block;margin:8px 0 4px;font-weight:600;font-size:13px">📅 To Date:</label>
+          <input type="date" id="holidayToDate" class="input" style="margin:4px 0">
+        </div>
+        <button id="holidayBtn" class="btn btn-warning" onclick="toggleHolidayMode()">🏖️ Holiday Mode ON Karo</button>
+      </div>
+
       <div class="card">
         <h3>🔔 Send Notification</h3>
         <div class="tabs" style="margin-bottom:15px">
@@ -310,6 +327,54 @@ input:checked + .toggle-slider:before{transform:translateX(26px)}
         <div id="notifHistory"><div style="text-align:center;padding:20px;color:#999">Koi notification nahi</div></div>
       </div>
     </div>
+    <div id="adminTokenHistory" class="hide">
+      <div class="card">
+        <h3>🎫 Token History — Last 10 Days</h3>
+        <div id="tokenHistoryList"><div style="text-align:center;padding:20px;color:#999">Loading...</div></div>
+      </div>
+      <div class="card">
+        <h3>📊 Total Token Stock</h3>
+        <small style="color:#6b7280">Sabhi customers ke paas abhi kitne tokens hain</small>
+        <div id="tokenStockList" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div id="adminDailyReport" class="hide">
+      <div class="card">
+        <div class="flex" style="margin-bottom:15px">
+          <h3>📊 Daily Report</h3>
+          <div>
+            <input type="date" id="dailyReportDate" class="input" style="width:auto;padding:8px;margin:0 5px 0 0">
+            <button class="btn btn-sm btn-primary" onclick="loadDailyReport()">🔍 Load</button>
+          </div>
+        </div>
+        <div id="dailyReportContent"><div style="text-align:center;padding:20px;color:#999">Date select karo</div></div>
+        <div id="dailyReportActions" class="hide" style="margin-top:15px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-primary" onclick="copyDailyReport()">📋 Copy</button>
+          <button class="btn btn-sm btn-success" onclick="shareDailyReport()">📤 Share</button>
+          <button class="btn btn-sm btn-danger" onclick="downloadDailyPDF()">📄 PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="adminMonthlyReport" class="hide">
+      <div class="card">
+        <div class="flex" style="margin-bottom:15px">
+          <h3>📅 Monthly Summary</h3>
+          <div>
+            <select id="monthlyReportMonth" class="input" style="width:auto;padding:8px;margin:0 5px 0 0"></select>
+            <button class="btn btn-sm btn-primary" onclick="loadMonthlyReport()">🔍 Load</button>
+          </div>
+        </div>
+        <div id="monthlyReportContent"><div style="text-align:center;padding:20px;color:#999">Month select karo</div></div>
+        <div id="monthlyReportActions" class="hide" style="margin-top:15px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-primary" onclick="copyMonthlyReport()">📋 Copy</button>
+          <button class="btn btn-sm btn-success" onclick="shareMonthlyReport()">📤 Share</button>
+          <button class="btn btn-sm btn-danger" onclick="downloadMonthlyPDF()">📄 PDF</button>
+        </div>
+      </div>
+    </div>
+
     <div id="adminLowTokens" class="hide">
       <div class="card">
         <div class="flex" style="margin-bottom:15px">
@@ -510,6 +575,18 @@ function updateOrderSummary(){
 }
 
 async function placeOrder(){
+  // Holiday mode check with dates
+  try{
+    const hs=await withTimeout(db.ref('settings/holidayMode').once('value'),5000,'Timeout.');
+    const hdata=hs.val();
+    if(hdata&&hdata.active){
+      const today=getISTDateString();
+      if(today>=hdata.fromDate&&today<=hdata.toDate){
+        alert(`🏖️ Aaj delivery nahi hai!\n\nHoliday: ${hdata.fromDate} se ${hdata.toDate} tak\n\nBaad mein try karo.`);
+        return;
+      }
+    }
+  }catch(e){console.error(e);}
   let oi={},tq=0,ta=0,errs=[];
   Object.keys(productsData).forEach(pid=>{const inp=document.getElementById('qty_'+pid);if(inp&&productsData[pid]){const q=parseInt(inp.value)||0,av=currentUser.data.tokens?.[pid]||0;if(q>0){if(q>av){errs.push(`${productsData[pid].name}: Only ${av} tokens`);return;}oi[pid]=q;tq+=q;ta+=q*productsData[pid].price;}}});
   if(errs.length>0){alert('⚠️ Order Error!\n\n'+errs.join('\n'));return;}
@@ -561,8 +638,10 @@ async function loadDashboard(){
     cs.forEach(child=>{const v=child.val();if(v&&v.phone)custCount++;});
 
     const today=getISTDateString();
+    const istNow=new Date(new Date().getTime()+(5.5*60*60*1000));
+    const todayAlt=istNow.toDateString();
     let todayOrders=0,todayPackets=0,todayRevenue=0;
-    os.forEach(child=>{const o=child.val();if(o.date===today&&o.items&&Object.keys(o.items).length>0){todayOrders++;todayPackets+=o.totalQuantity||0;todayRevenue+=o.totalAmount||0;}});
+    os.forEach(child=>{const o=child.val();if((o.date===today||o.date===todayAlt)&&o.items&&Object.keys(o.items).length>0){todayOrders++;todayPackets+=o.totalQuantity||0;todayRevenue+=o.totalAmount||0;}});
 
     document.getElementById('statCust').textContent=custCount;
     document.getElementById('statOrders').textContent=todayOrders;
@@ -591,8 +670,10 @@ async function updateDashboardStats(){
     let custCount=0;
     cs.forEach(child=>{const v=child.val();if(v&&v.phone)custCount++;});
     const today=getISTDateString();
+    const istNow3=new Date(new Date().getTime()+(5.5*60*60*1000));
+    const todayAlt3=istNow3.toDateString();
     let todayOrders=0,todayPackets=0,todayRevenue=0;
-    os.forEach(child=>{const o=child.val();if(o.date===today&&o.items&&Object.keys(o.items).length>0){todayOrders++;todayPackets+=o.totalQuantity||0;todayRevenue+=o.totalAmount||0;}});
+    os.forEach(child=>{const o=child.val();if((o.date===today||o.date===todayAlt3)&&o.items&&Object.keys(o.items).length>0){todayOrders++;todayPackets+=o.totalQuantity||0;todayRevenue+=o.totalAmount||0;}});
     document.getElementById('statCust').textContent=custCount;
     document.getElementById('statOrders').textContent=todayOrders;
     document.getElementById('statPackets').textContent=todayPackets;
@@ -602,10 +683,10 @@ async function updateDashboardStats(){
 
 function adminTab(evt,t){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));evt.currentTarget.classList.add('active');
-  ['adminDash','adminOrders','adminCustomers','adminBuildings','adminProducts','adminNotif','adminLowTokens','adminSettings'].forEach(id=>document.getElementById(id).classList.add('hide'));
-  const m={dash:'adminDash',orders:'adminOrders',customers:'adminCustomers',buildings:'adminBuildings',products:'adminProducts',notif:'adminNotif',lowtokens:'adminLowTokens',settings:'adminSettings'};
+  ['adminDash','adminOrders','adminCustomers','adminBuildings','adminProducts','adminNotif','adminLowTokens','adminTokenHistory','adminDailyReport','adminMonthlyReport','adminSettings'].forEach(id=>document.getElementById(id).classList.add('hide'));
+  const m={dash:'adminDash',orders:'adminOrders',customers:'adminCustomers',buildings:'adminBuildings',products:'adminProducts',notif:'adminNotif',lowtokens:'adminLowTokens',tokenhistory:'adminTokenHistory',dailyreport:'adminDailyReport',monthlyreport:'adminMonthlyReport',settings:'adminSettings'};
   if(m[t])document.getElementById(m[t]).classList.remove('hide');
-  switch(t){case 'dash':loadDashboard();break;case 'orders':loadAdminOrders();break;case 'customers':loadAdminCustomers();break;case 'buildings':loadAdminBuildings();break;case 'products':loadAdminProducts();break;case 'notif':loadNotifPanel();break;case 'lowtokens':loadLowTokens();break;case 'settings':loadAdminSettings();break;}
+  switch(t){case 'dash':loadDashboard();break;case 'orders':loadAdminOrders();break;case 'customers':loadAdminCustomers();break;case 'buildings':loadAdminBuildings();break;case 'products':loadAdminProducts();break;case 'notif':loadNotifPanel();break;case 'lowtokens':loadLowTokens();break;case 'tokenhistory':loadTokenHistory();break;case 'dailyreport':initDailyReport();break;case 'monthlyreport':initMonthlyReport();break;case 'settings':loadAdminSettings();break;}
 }
 
 async function loadAdminOrders(){
@@ -616,7 +697,9 @@ async function loadAdminOrders(){
     const os=await withTimeout(db.ref('orders').once('value'),10000,'Timeout.');
     const orders=[];os.forEach(c=>orders.push(c.val()));
     const today=getISTDateString();
-    const to=orders.filter(o=>o.date===today&&o.items&&Object.keys(o.items).length>0);
+    const istNow2=new Date(new Date().getTime()+(5.5*60*60*1000));
+    const todayAlt2=istNow2.toDateString();
+    const to=orders.filter(o=>(o.date===today||o.date===todayAlt2)&&o.items&&Object.keys(o.items).length>0);
 
     if(to.length===0){
       document.getElementById('todayOrdersBuildings').innerHTML=
@@ -793,11 +876,23 @@ async function showAddTokenModal(phone){
 
 async function saveTokens(phone){
   const cust=customersCache[phone];if(!cust){alert('Customer nahi mila!');return;}
-  const nt={...(cust.tokens||{})};let anyAdded=false;
-  Object.keys(productsData).forEach(pid=>{const inp=document.getElementById('tok_'+pid);if(inp){const q=parseInt(inp.value)||0;if(q>0){nt[pid]=(nt[pid]||0)+q;anyAdded=true;}}});
+  const nt={...(cust.tokens||{})};let anyAdded=false;const addedTokens={};
+  Object.keys(productsData).forEach(pid=>{const inp=document.getElementById('tok_'+pid);if(inp){const q=parseInt(inp.value)||0;if(q>0){nt[pid]=(nt[pid]||0)+q;anyAdded=true;addedTokens[pid]=q;}}});
   if(!anyAdded){alert('⚠️ Koi token add nahi kiya!');return;}
-  try{showSync('syncing');await withTimeout(db.ref('customers/'+phone+'/tokens').set(nt),8000,'Timeout.');customersCache[phone].tokens=nt;showSync('success');document.getElementById('tokenModal').remove();alert('✅ Tokens Add Ho Gaye!');loadAdminCustomers();}
-  catch(e){showSync('error');alert('❌ Error: '+e.message);}
+  try{
+    showSync('syncing');
+    await withTimeout(db.ref('customers/'+phone+'/tokens').set(nt),8000,'Timeout.');
+    // Token history save karo
+    const histId='th_'+Date.now();
+    await withTimeout(db.ref('token_history/'+histId).set({
+      id:histId,phone,name:cust.name,building:cust.building,buildingId:cust.buildingId,
+      wing:cust.wing,wingId:cust.wingId,flat:cust.flat,tokens:addedTokens,
+      date:getISTDateString(),createdAt:new Date().toISOString()
+    }),8000,'Timeout.');
+    customersCache[phone].tokens=nt;
+    showSync('success');document.getElementById('tokenModal').remove();
+    alert('✅ Tokens Add Ho Gaye!');loadAdminCustomers();
+  }catch(e){showSync('error');alert('❌ Error: '+e.message);}
 }
 
 async function loadAdminBuildings(){
@@ -841,6 +936,7 @@ function switchNotifTab(evt,t){
 async function loadNotifPanel(){
   loadNotifHistory();
   await loadNotifFilters();
+  await loadHolidayStatus();
 }
 
 async function sendNotifAll(){
@@ -1003,8 +1099,13 @@ async function changeAdminPassword(){
 async function saveOrderTime(){const sh=parseInt(document.getElementById('setStart').value),eh=parseInt(document.getElementById('setEnd').value);if(sh>=eh){alert('⚠️ End time, start ke baad hona chahiye!');return;}try{showSync('syncing');await withTimeout(db.ref('settings').update({orderStartHour:sh,orderEndHour:eh}),8000,'Timeout.');showSync('success');alert('✅ Time Save Ho Gaya!');}catch(e){showSync('error');}}
 async function saveNotificationSettings(){try{await withTimeout(db.ref('settings/notifications').set({orders:document.getElementById('notifOrders').checked,registration:document.getElementById('notifRegister').checked,lowToken:document.getElementById('notifLowToken').checked}),8000,'Timeout.');showSync('success');}catch(e){showSync('error');}}
 
-async function shareApp(){try{const h=document.documentElement.outerHTML,b=new Blob([h],{type:'text/html'}),f=new File([b],'PB-Milk-App.html',{type:'text/html'});if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({title:'PB Milk App',text:'🥛 PB Milk',files:[f]});else downloadAppFile(h);}catch(e){downloadAppFile(document.documentElement.outerHTML);}}
-function downloadAppFile(h){const b=new Blob([h],{type:'text/html'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='PB-Milk-App.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);alert('✅ App download ho gayi!');}
+async function shareApp(){
+  try{
+    const shareData={title:'PB Milk - Order App',text:'🥛 PB Milk Delivery App\nOnline Order System\n\nYahan se order karo:',url:'https://kadamparesh2-ui.github.io'};
+    if(navigator.share)await navigator.share(shareData);
+    else{await navigator.clipboard.writeText('https://kadamparesh2-ui.github.io');alert('✅ Link copy ho gayi!\n\nWhatsApp pe paste karo.');}
+  }catch(e){await navigator.clipboard.writeText('https://kadamparesh2-ui.github.io').catch(()=>{});alert('✅ Link copy ho gayi!\n\nWhatsApp pe paste karo.');}
+}
 
 // ============================
 // ADMIN - CUSTOMER KE LIYE ORDER
@@ -1101,6 +1202,270 @@ async function showCustomerOrderHistory(phone){
 }
 
 // ============================
+// TOKEN HISTORY
+// ============================
+async function loadTokenHistory(){
+  try{
+    showSync('syncing');
+    const [hs,ps,cs]=await Promise.all([
+      withTimeout(db.ref('token_history').once('value'),10000,'Timeout.'),
+      withTimeout(db.ref('products').once('value'),8000,'Timeout.'),
+      withTimeout(db.ref('customers').once('value'),10000,'Timeout.')
+    ]);
+    productsData=ps.val()||{};
+    const history=[];hs.forEach(c=>history.push(c.val()));
+
+    // Last 10 days filter
+    const ist=new Date(new Date().getTime()+(5.5*60*60*1000));
+    const cutoff=new Date(ist);cutoff.setDate(cutoff.getDate()-10);
+    const cutoffStr=cutoff.toISOString().split('T')[0];
+    const recent=history.filter(h=>h.date>=cutoffStr);
+    recent.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+    if(recent.length===0){
+      document.getElementById('tokenHistoryList').innerHTML='<div style="text-align:center;padding:20px;color:#999">Last 10 days mein koi token nahi diya</div>';
+    }else{
+      // Group by date
+      const byDate={};
+      recent.forEach(h=>{if(!byDate[h.date])byDate[h.date]=[];byDate[h.date].push(h);});
+      let html='';
+      Object.keys(byDate).sort().reverse().forEach(date=>{
+        const d=new Date(date+'T00:00:00');
+        html+=`<div style="margin-bottom:15px"><div style="background:#6366f1;color:#fff;padding:8px 12px;border-radius:8px;font-weight:700;margin-bottom:8px">📅 ${d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>`;
+        byDate[date].forEach(h=>{
+          let thtml='';
+          Object.keys(h.tokens||{}).forEach(pid=>{const p=productsData[pid];if(p)thtml+=`<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:10px;background:${p.color};color:#fff;font-size:12px;font-weight:700">${p.icon} ${p.name}: +${h.tokens[pid]}</span>`;});
+          html+=`<div class="order-item" style="margin:6px 0"><div style="margin-bottom:5px"><strong>🏢 ${h.building}</strong> → <strong>📍 ${h.wing}</strong> → <strong>🏠 Flat ${h.flat}</strong></div><div style="margin-bottom:4px;color:#6366f1;font-weight:600">${h.name}</div><div style="display:flex;flex-wrap:wrap;gap:4px">${thtml}</div></div>`;
+        });
+        html+='</div>';
+      });
+      document.getElementById('tokenHistoryList').innerHTML=html;
+    }
+
+    // Total stock
+    const customers=[];cs.forEach(c=>{const v=c.val();if(v&&v.phone)customers.push(v);});
+    const stock={};
+    Object.keys(productsData).forEach(pid=>{stock[pid]=0;});
+    customers.forEach(c=>{Object.keys(productsData).forEach(pid=>{stock[pid]+=(c.tokens?.[pid]||0);});});
+    let shtml='';
+    Object.keys(productsData).forEach(pid=>{
+      const p=productsData[pid];
+      shtml+=`<div class="order-item"><div class="flex"><div><span style="font-size:20px">${p.icon}</span> <strong>${p.name}</strong></div><strong style="color:${p.color};font-size:18px">${stock[pid]} tokens</strong></div></div>`;
+    });
+    document.getElementById('tokenStockList').innerHTML=shtml||'<div style="color:#999">Koi data nahi</div>';
+    showSync('success');
+  }catch(e){showSync('error');console.error(e);}
+}
+
+// ============================
+// DAILY REPORT
+// ============================
+let dailyReportData='';
+
+function initDailyReport(){
+  const inp=document.getElementById('dailyReportDate');
+  if(!inp.value) inp.value=getISTDateString();
+}
+
+async function loadDailyReport(){
+  const date=document.getElementById('dailyReportDate').value;
+  if(!date){alert('⚠️ Date select karo!');return;}
+  try{
+    showSync('syncing');
+    const [os,ps]=await Promise.all([
+      withTimeout(db.ref('orders').once('value'),10000,'Timeout.'),
+      withTimeout(db.ref('products').once('value'),8000,'Timeout.')
+    ]);
+    productsData=ps.val()||{};
+    const orders=[];os.forEach(c=>orders.push(c.val()));
+    const dayOrders=orders.filter(o=>o.date===date&&o.items&&Object.keys(o.items).length>0);
+
+    if(dayOrders.length===0){
+      document.getElementById('dailyReportContent').innerHTML='<div style="text-align:center;padding:20px;color:#999">Is date ka koi order nahi</div>';
+      document.getElementById('dailyReportActions').classList.add('hide');
+      showSync('success');return;
+    }
+
+    // Product wise totals
+    const prodTotals={};
+    Object.keys(productsData).forEach(pid=>prodTotals[pid]=0);
+    let totalPkts=0,totalRev=0;
+    dayOrders.forEach(o=>{
+      Object.keys(o.items||{}).forEach(pid=>{prodTotals[pid]=(prodTotals[pid]||0)+o.items[pid];});
+      totalPkts+=o.totalQuantity||0;totalRev+=o.totalAmount||0;
+    });
+
+    // Building wise group
+    const bg={};
+    dayOrders.forEach(o=>{
+      const b=o.building||'Unknown';const w=o.wing||'Unknown';
+      if(!bg[b])bg[b]={};if(!bg[b][w])bg[b][w]=[];bg[b][w].push(o);
+    });
+
+    // HTML display
+    let html=`<div style="background:#f0f9ff;padding:15px;border-radius:10px;margin-bottom:15px">
+      <div class="flex"><strong>📅 Date:</strong><strong>${date}</strong></div>
+      <div class="flex"><strong>📦 Total Orders:</strong><strong>${dayOrders.length}</strong></div>
+      <div class="flex"><strong>🛍️ Total Packets:</strong><strong>${totalPkts}</strong></div>
+      <div class="flex"><strong style="color:#10b981">💰 Total Revenue:</strong><strong style="color:#10b981">₹${totalRev}</strong></div>
+    </div>`;
+
+    html+=`<div style="margin-bottom:15px"><strong>📦 Product Wise:</strong><div style="margin-top:8px">`;
+    Object.keys(productsData).forEach(pid=>{
+      const p=productsData[pid];if(prodTotals[pid]>0)
+      html+=`<div class="flex" style="padding:6px 0;border-bottom:1px solid #f3f4f6"><span>${p.icon} ${p.name}</span><strong style="color:${p.color}">${prodTotals[pid]} packets</strong></div>`;
+    });
+    html+=`</div></div><strong>🏢 Building Wise:</strong>`;
+
+    Object.keys(bg).forEach(b=>{
+      html+=`<div style="margin-top:10px;background:#f9fafb;border-radius:10px;padding:10px"><strong style="color:#6366f1">🏢 ${b}</strong>`;
+      Object.keys(bg[b]).forEach(w=>{
+        const wOrders=bg[b][w];
+        const wPkts=wOrders.reduce((s,o)=>s+(o.totalQuantity||0),0);
+        html+=`<div style="margin:6px 0 4px 10px"><strong>📍 ${w}</strong> <small>(${wOrders.length} orders, ${wPkts} pkts)</small>`;
+        wOrders.sort((a,c)=>(parseInt(a.flat)||0)-(parseInt(c.flat)||0));
+        wOrders.forEach(o=>{
+          let items=Object.keys(o.items||{}).map(pid=>{const p=productsData[pid];return p?`${p.name}×${o.items[pid]}`:''}).filter(Boolean).join(', ');
+          html+=`<div style="margin:3px 0 3px 15px;font-size:13px">🏠 Flat ${o.flat}: ${items}</div>`;
+        });
+        html+=`</div>`;
+      });
+      html+=`</div>`;
+    });
+
+    document.getElementById('dailyReportContent').innerHTML=html;
+    document.getElementById('dailyReportActions').classList.remove('hide');
+
+    // Text report for copy/share
+    const d=new Date(date+'T00:00:00');
+    dailyReportData=`📊 PB Milk Daily Report\n📅 ${d.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}\n${'='.repeat(35)}\n\n`;
+    dailyReportData+=`📦 Total Orders: ${dayOrders.length}\n🛍️ Total Packets: ${totalPkts}\n💰 Total Revenue: ₹${totalRev}\n\n`;
+    dailyReportData+=`📦 Product Wise:\n`;
+    Object.keys(productsData).forEach(pid=>{const p=productsData[pid];if(prodTotals[pid]>0)dailyReportData+=`  ${p.name}: ${prodTotals[pid]} packets\n`;});
+    dailyReportData+=`\n🏢 Building Wise:\n`;
+    Object.keys(bg).forEach(b=>{
+      dailyReportData+=`\n🏢 ${b}\n`;
+      Object.keys(bg[b]).forEach(w=>{
+        dailyReportData+=`  📍 ${w}\n`;
+        bg[b][w].sort((a,c)=>(parseInt(a.flat)||0)-(parseInt(c.flat)||0));
+        bg[b][w].forEach(o=>{
+          let items=Object.keys(o.items||{}).map(pid=>{const p=productsData[pid];return p?`${p.name}×${o.items[pid]}`:''}).filter(Boolean).join(', ');
+          dailyReportData+=`    Flat ${o.flat}: ${items}\n`;
+        });
+      });
+    });
+    showSync('success');
+  }catch(e){showSync('error');alert('❌ Error: '+e.message);}
+}
+
+async function copyDailyReport(){try{await navigator.clipboard.writeText(dailyReportData);alert('✅ Report copy ho gayi!');}catch(e){alert('❌ Copy nahi hua!');}}
+async function shareDailyReport(){try{if(navigator.share)await navigator.share({title:'PB Milk Daily Report',text:dailyReportData});else{await navigator.clipboard.writeText(dailyReportData);alert('✅ Clipboard mein copy ho gayi!');}}catch(e){alert('❌ Share nahi hua!');}}
+function downloadDailyPDF(){
+  const date=document.getElementById('dailyReportDate').value;
+  const content=document.getElementById('dailyReportContent').innerHTML;
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Daily Report - ${date}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}h1{color:#6366f1;text-align:center}.flex{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee}@media print{button{display:none}}</style></head><body><h1>📊 PB Milk Daily Report</h1><h2 style="text-align:center;color:#6b7280">${date}</h2>${content}<br><button onclick="window.print()" style="background:#6366f1;color:#fff;padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:16px">🖨️ Print / Save PDF</button></body></html>`);
+  win.document.close();
+}
+
+// ============================
+// MONTHLY REPORT
+// ============================
+let monthlyReportData='';
+
+function initMonthlyReport(){
+  const sel=document.getElementById('monthlyReportMonth');
+  if(sel.options.length>0)return;
+  const ist=new Date(new Date().getTime()+(5.5*60*60*1000));
+  for(let i=0;i<12;i++){
+    const d=new Date(ist.getFullYear(),ist.getMonth()-i,1);
+    const val=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const label=d.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+    sel.innerHTML+=`<option value="${val}" ${i===0?'selected':''}>${label}</option>`;
+  }
+}
+
+async function loadMonthlyReport(){
+  const month=document.getElementById('monthlyReportMonth').value;
+  if(!month){alert('⚠️ Month select karo!');return;}
+  try{
+    showSync('syncing');
+    const [os,ps]=await Promise.all([
+      withTimeout(db.ref('orders').once('value'),10000,'Timeout.'),
+      withTimeout(db.ref('products').once('value'),8000,'Timeout.')
+    ]);
+    productsData=ps.val()||{};
+    const orders=[];os.forEach(c=>orders.push(c.val()));
+    const monthOrders=orders.filter(o=>o.date&&o.date.startsWith(month)&&o.items&&Object.keys(o.items).length>0);
+
+    if(monthOrders.length===0){
+      document.getElementById('monthlyReportContent').innerHTML='<div style="text-align:center;padding:20px;color:#999">Is month ka koi order nahi</div>';
+      document.getElementById('monthlyReportActions').classList.add('hide');
+      showSync('success');return;
+    }
+
+    // Totals
+    const prodTotals={};Object.keys(productsData).forEach(pid=>prodTotals[pid]=0);
+    let totalPkts=0,totalRev=0,totalOrders=monthOrders.length;
+    monthOrders.forEach(o=>{
+      Object.keys(o.items||{}).forEach(pid=>{prodTotals[pid]=(prodTotals[pid]||0)+o.items[pid];});
+      totalPkts+=o.totalQuantity||0;totalRev+=o.totalAmount||0;
+    });
+
+    // Day wise
+    const byDay={};
+    monthOrders.forEach(o=>{if(!byDay[o.date])byDay[o.date]={orders:0,packets:0,revenue:0};byDay[o.date].orders++;byDay[o.date].packets+=o.totalQuantity||0;byDay[o.date].revenue+=o.totalAmount||0;});
+
+    const [yr,mn]=month.split('-');
+    const monthLabel=new Date(parseInt(yr),parseInt(mn)-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+
+    let html=`<div style="background:#f0f9ff;padding:15px;border-radius:10px;margin-bottom:15px">
+      <div class="flex"><strong>📅 Month:</strong><strong>${monthLabel}</strong></div>
+      <div class="flex"><strong>📦 Total Orders:</strong><strong>${totalOrders}</strong></div>
+      <div class="flex"><strong>🛍️ Total Packets:</strong><strong>${totalPkts}</strong></div>
+      <div class="flex"><strong style="color:#10b981">💰 Total Revenue:</strong><strong style="color:#10b981">₹${totalRev}</strong></div>
+    </div>`;
+
+    html+=`<div style="margin-bottom:15px"><strong>📦 Product Wise:</strong><div style="margin-top:8px">`;
+    Object.keys(productsData).forEach(pid=>{const p=productsData[pid];if(prodTotals[pid]>0)html+=`<div class="flex" style="padding:6px 0;border-bottom:1px solid #f3f4f6"><span>${p.icon} ${p.name}</span><strong style="color:${p.color}">${prodTotals[pid]} packets</strong></div>`;});
+    html+=`</div></div>`;
+
+    html+=`<strong>📆 Day Wise:</strong><div style="margin-top:8px">`;
+    Object.keys(byDay).sort().forEach(date=>{
+      const d=new Date(date+'T00:00:00');
+      html+=`<div class="flex" style="padding:6px 0;border-bottom:1px solid #f3f4f6">
+        <span>${d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>
+        <span>${byDay[date].orders} orders • ${byDay[date].packets} pkts</span>
+        <strong style="color:#10b981">₹${byDay[date].revenue}</strong>
+      </div>`;
+    });
+    html+=`</div>`;
+
+    document.getElementById('monthlyReportContent').innerHTML=html;
+    document.getElementById('monthlyReportActions').classList.remove('hide');
+
+    // Text for copy/share
+    monthlyReportData=`📅 PB Milk Monthly Summary\n${monthLabel}\n${'='.repeat(35)}\n\n`;
+    monthlyReportData+=`📦 Total Orders: ${totalOrders}\n🛍️ Total Packets: ${totalPkts}\n💰 Total Revenue: ₹${totalRev}\n\n`;
+    monthlyReportData+=`📦 Product Wise:\n`;
+    Object.keys(productsData).forEach(pid=>{const p=productsData[pid];if(prodTotals[pid]>0)monthlyReportData+=`  ${p.name}: ${prodTotals[pid]} packets\n`;});
+    monthlyReportData+=`\n📆 Day Wise:\n`;
+    Object.keys(byDay).sort().forEach(date=>{const d=new Date(date+'T00:00:00');monthlyReportData+=`  ${d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}: ${byDay[date].orders} orders • ${byDay[date].packets} pkts • ₹${byDay[date].revenue}\n`;});
+    showSync('success');
+  }catch(e){showSync('error');alert('❌ Error: '+e.message);}
+}
+
+async function copyMonthlyReport(){try{await navigator.clipboard.writeText(monthlyReportData);alert('✅ Report copy ho gayi!');}catch(e){alert('❌ Copy nahi hua!');}}
+async function shareMonthlyReport(){try{if(navigator.share)await navigator.share({title:'PB Milk Monthly Report',text:monthlyReportData});else{await navigator.clipboard.writeText(monthlyReportData);alert('✅ Clipboard mein copy ho gayi!');}}catch(e){alert('❌ Share nahi hua!');}}
+function downloadMonthlyPDF(){
+  const month=document.getElementById('monthlyReportMonth').value;
+  const content=document.getElementById('monthlyReportContent').innerHTML;
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Monthly Report - ${month}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}h1{color:#6366f1;text-align:center}.flex{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee}@media print{button{display:none}}</style></head><body><h1>📅 PB Milk Monthly Summary</h1><h2 style="text-align:center;color:#6b7280">${month}</h2>${content}<br><button onclick="window.print()" style="background:#6366f1;color:#fff;padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:16px">🖨️ Print / Save PDF</button></body></html>`);
+  win.document.close();
+}
+
+// ============================
 // LOW TOKENS TAB
 // ============================
 async function loadLowTokens(){
@@ -1173,6 +1538,90 @@ async function loadLowTokens(){
     document.getElementById('lowTokensList').innerHTML=html;
     showSync('success');
   }catch(e){showSync('error');console.error(e);}
+}
+
+// ============================
+// HOLIDAY MODE
+// ============================
+async function loadHolidayStatus(){
+  try{
+    const s=await withTimeout(db.ref('settings/holidayMode').once('value'),8000,'Timeout.');
+    const hdata=s.val();
+    const today=getISTDateString();
+    if(hdata&&hdata.active&&today>hdata.toDate){
+      await db.ref('settings/holidayMode').set({active:false});
+      updateHolidayUI(null);
+    }else{
+      updateHolidayUI(hdata&&hdata.active?hdata:null);
+    }
+  }catch(e){console.error(e);}
+}
+
+function updateHolidayUI(hdata){
+  const status=document.getElementById('holidayStatus');
+  const btn=document.getElementById('holidayBtn');
+  const card=document.getElementById('holidayModeCard');
+  const datePicker=document.getElementById('holidayDatePicker');
+  if(!status||!btn)return;
+  if(hdata&&hdata.active){
+    status.className='alert alert-danger';
+    status.innerHTML=`🏖️ Holiday Mode ON<br><small>${hdata.fromDate} se ${hdata.toDate} tak delivery band</small>`;
+    btn.className='btn btn-success';
+    btn.textContent='✅ Holiday Mode OFF Karo';
+    card.style.border='2px solid #ef4444';
+    if(datePicker)datePicker.classList.add('hide');
+  }else{
+    status.className='alert alert-success';
+    status.textContent='✅ Delivery Chal Rahi Hai';
+    btn.className='btn btn-warning';
+    btn.textContent='🏖️ Holiday Mode ON Karo';
+    card.style.border='none';
+    if(datePicker)datePicker.classList.remove('hide');
+    const today=getISTDateString();
+    const fromInp=document.getElementById('holidayFromDate');
+    const toInp=document.getElementById('holidayToDate');
+    if(fromInp&&!fromInp.value)fromInp.value=today;
+    if(toInp&&!toInp.value)toInp.value=today;
+  }
+}
+
+async function toggleHolidayMode(){
+  try{
+    const s=await withTimeout(db.ref('settings/holidayMode').once('value'),8000,'Timeout.');
+    const hdata=s.val();
+    const isHoliday=hdata&&hdata.active;
+    if(isHoliday){
+      if(!confirm('✅ Holiday Mode OFF karna chahte ho?\n\nSabhi customers ko notification jayegi aur orders chalu ho jayenge!'))return;
+      showSync('syncing');
+      await withTimeout(db.ref('settings/holidayMode').set({active:false}),8000,'Timeout.');
+      const nid='notif_'+Date.now();
+      await withTimeout(db.ref('notifications/'+nid).set({
+        id:nid,message:'✅ Delivery chalu ho gayi! Aap ab order place kar sakte hain.',
+        type:'all',target:'all',sentAt:new Date().toISOString(),active:true,isHolidayNotif:true
+      }),8000,'Timeout.');
+      updateHolidayUI(null);
+      showSync('success');
+      alert('✅ Holiday Mode OFF!\n\nSabhi customers ko notification gayi.');
+    }else{
+      const fromDate=document.getElementById('holidayFromDate').value;
+      const toDate=document.getElementById('holidayToDate').value;
+      if(!fromDate||!toDate){alert('⚠️ From aur To date select karo!');return;}
+      if(fromDate>toDate){alert('⚠️ To date, From date ke baad honi chahiye!');return;}
+      if(!confirm(`🏖️ Holiday Mode ON karna chahte ho?\n\n📅 ${fromDate} se ${toDate} tak\n\nSabhi customers ko notification jayegi!`))return;
+      showSync('syncing');
+      await withTimeout(db.ref('settings/holidayMode').set({active:true,fromDate,toDate}),8000,'Timeout.');
+      const nid='notif_'+Date.now();
+      const msg=`🏖️ ${fromDate} se ${toDate} tak delivery nahi hogi — Holiday hai.`;
+      await withTimeout(db.ref('notifications/'+nid).set({
+        id:nid,message:msg,type:'all',target:'all',
+        sentAt:new Date().toISOString(),active:true,isHolidayNotif:true
+      }),8000,'Timeout.');
+      updateHolidayUI({active:true,fromDate,toDate});
+      showSync('success');
+      alert(`🏖️ Holiday Mode ON!\n\n${fromDate} se ${toDate} tak\n\nSabhi customers ko notification gayi.`);
+    }
+    loadNotifHistory();
+  }catch(e){showSync('error');alert('❌ Error: '+e.message);}
 }
 
 // ============================
