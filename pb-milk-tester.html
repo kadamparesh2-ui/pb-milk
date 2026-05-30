@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PB Milk - Auto Tester</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;padding:15px}
+.app{max-width:600px;margin:0 auto;background:#f9fafb;min-height:100vh;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+.header{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:25px 20px;text-align:center}
+.header h1{font-size:22px;font-weight:800;margin-bottom:5px}
+.header p{font-size:13px;opacity:0.9}
+.body{padding:15px}
+.card{background:#fff;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 4px 12px rgba(0,0,0,0.08)}
+.card h3{font-size:15px;font-weight:700;color:#1f2937;margin-bottom:12px}
+.btn{width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin:6px 0;transition:all 0.2s}
+.btn:active{transform:scale(0.98)}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.btn-primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+.btn-success{background:linear-gradient(135deg,#10b981,#059669);color:#fff}
+.btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff}
+.btn-warning{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff}
+.log{background:#1f2937;border-radius:12px;padding:15px;font-family:monospace;font-size:12px;max-height:400px;overflow-y:auto;margin-top:10px}
+.log-line{padding:3px 0;border-bottom:1px solid #374151;line-height:1.6}
+.log-line:last-child{border:none}
+.ok{color:#10b981}
+.err{color:#ef4444}
+.info{color:#60a5fa}
+.warn{color:#fbbf24}
+.progress-bar{height:8px;background:#e5e7eb;border-radius:10px;overflow:hidden;margin:10px 0}
+.progress-fill{height:100%;background:linear-gradient(90deg,#6366f1,#10b981);border-radius:10px;transition:width 0.3s;width:0%}
+.stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6}
+.stat:last-child{border:none}
+.stat-val{font-weight:800;color:#6366f1;font-size:18px}
+.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700}
+.badge-ok{background:#d1fae5;color:#065f46}
+.badge-err{background:#fee2e2;color:#991b1b}
+.badge-warn{background:#fef3c7;color:#92400e}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div style="font-size:40px;margin-bottom:8px">🧪</div>
+    <h1>PB Milk Auto Tester</h1>
+    <p>10 Customers + Orders Test Tool</p>
+  </div>
+  <div class="body">
+
+    <div class="card">
+      <h3>⚙️ Step 1: Firebase Connect</h3>
+      <div id="firebaseStatus" class="badge badge-warn">⏳ Not Connected</div>
+      <button class="btn btn-primary" id="connectBtn" onclick="connectFirebase()">🔥 Firebase Connect Karo</button>
+    </div>
+
+    <div class="card">
+      <h3>📋 Step 2: Current Data Check</h3>
+      <div id="dataStats">
+        <div class="stat"><span>Buildings:</span><span id="bldgCount" class="stat-val">-</span></div>
+        <div class="stat"><span>Products:</span><span id="prodCount" class="stat-val">-</span></div>
+        <div class="stat"><span>Existing Customers:</span><span id="custCount" class="stat-val">-</span></div>
+        <div class="stat"><span>Today's Orders:</span><span id="orderCount" class="stat-val">-</span></div>
+      </div>
+      <button class="btn btn-warning" id="checkBtn" onclick="checkData()" disabled>🔍 Data Check Karo</button>
+    </div>
+
+    <div class="card">
+      <h3>👥 Step 3: 10 Test Customers + Orders</h3>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:10px">10 fake customers banayega, har ek ka order place karega, phir admin panel mein check karega.</p>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div id="progressText" style="font-size:12px;color:#6b7280;text-align:center;margin-bottom:8px">Ready...</div>
+      <button class="btn btn-success" id="testBtn" onclick="runFullTest()" disabled>🚀 Full Test Chalao</button>
+      <button class="btn btn-danger" id="cleanBtn" onclick="cleanTestData()" disabled>🗑️ Test Data Delete Karo</button>
+    </div>
+
+    <div class="card">
+      <h3>📊 Test Results</h3>
+      <div id="results" style="color:#6b7280;font-size:13px;text-align:center;padding:10px">Test abhi nahi chala</div>
+    </div>
+
+    <div class="card">
+      <h3>📝 Live Log</h3>
+      <div class="log" id="logBox">
+        <div class="log-line info">🧪 PB Milk Tester Ready...</div>
+        <div class="log-line info">⬆️ Step 1 se shuru karo</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyC8bz2k1zSJWIpEyeNnSdcGwWjlPbHMoig",
+  authDomain: "pb-milk.firebaseapp.com",
+  databaseURL: "https://pb-milk-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "pb-milk"
+};
+
+let db, auth, connected = false;
+let buildings = {}, products = {}, createdCustomers = [], createdOrders = [];
+
+function getISTDateString() {
+  const now = new Date();
+  const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+  return ist.toISOString().split('T')[0];
+}
+
+function log(msg, type = 'info') {
+  const box = document.getElementById('logBox');
+  const line = document.createElement('div');
+  line.className = `log-line ${type}`;
+  const time = new Date().toLocaleTimeString('en-IN');
+  line.textContent = `[${time}] ${msg}`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  console.log(msg);
+}
+
+function setProgress(pct, text) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = text;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function connectFirebase() {
+  const btn = document.getElementById('connectBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Connecting...';
+  log('Firebase connect karne ki koshish...', 'info');
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    auth = firebase.auth();
+    const test = await Promise.race([
+      db.ref('initialized').once('value'),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), 10000))
+    ]);
+    connected = true;
+    document.getElementById('firebaseStatus').className = 'badge badge-ok';
+    document.getElementById('firebaseStatus').textContent = '✅ Connected!';
+    document.getElementById('checkBtn').disabled = false;
+    btn.textContent = '✅ Connected';
+    log('✅ Firebase Connected!', 'ok');
+    await checkData();
+  } catch (e) {
+    document.getElementById('firebaseStatus').className = 'badge badge-err';
+    document.getElementById('firebaseStatus').textContent = '❌ Failed';
+    btn.disabled = false;
+    btn.textContent = '🔥 Retry Connect';
+    log('❌ Connection failed: ' + e.message, 'err');
+  }
+}
+
+async function checkData() {
+  if (!connected) { log('⚠️ Pehle connect karo!', 'warn'); return; }
+  log('📊 Data check ho raha hai...', 'info');
+  try {
+    const [bs, ps, cs, os] = await Promise.all([
+      db.ref('buildings').once('value'),
+      db.ref('products').once('value'),
+      db.ref('customers').once('value'),
+      db.ref('orders').once('value')
+    ]);
+    buildings = bs.val() || {};
+    products = ps.val() || {};
+    const customers = cs.val() || {};
+    const orders = os.val() || {};
+    const today = getISTDateString();
+    let custCount = 0, orderTodayCount = 0;
+    Object.values(customers).forEach(c => { if (c && c.phone) custCount++; });
+    Object.values(orders).forEach(o => { if (o && o.date === today) orderTodayCount++; });
+    document.getElementById('bldgCount').textContent = Object.keys(buildings).length;
+    document.getElementById('prodCount').textContent = Object.keys(products).length;
+    document.getElementById('custCount').textContent = custCount;
+    document.getElementById('orderCount').textContent = orderTodayCount;
+    log(`✅ Buildings: ${Object.keys(buildings).length}, Products: ${Object.keys(products).length}`, 'ok');
+    log(`✅ Customers: ${custCount}, Today Orders: ${orderTodayCount}`, 'ok');
+    if (Object.keys(buildings).length === 0) {
+      log('⚠️ Koi building nahi! Test se pehle admin se building add karwao.', 'warn');
+    } else if (Object.keys(products).length === 0) {
+      log('⚠️ Koi product nahi!', 'warn');
+    } else {
+      document.getElementById('testBtn').disabled = false;
+      document.getElementById('cleanBtn').disabled = false;
+      log('✅ Sab theek hai — Test chalane ke liye ready!', 'ok');
+    }
+  } catch (e) {
+    log('❌ Data check failed: ' + e.message, 'err');
+  }
+}
+
+async function runFullTest() {
+  if (!connected) return;
+  const btn = document.getElementById('testBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running...';
+  createdCustomers = [];
+  createdOrders = [];
+  log('', 'info');
+  log('🚀 ====== FULL TEST SHURU ======', 'info');
+
+  const bldgKeys = Object.keys(buildings);
+  const prodKeys = Object.keys(products);
+  if (bldgKeys.length === 0 || prodKeys.length === 0) {
+    log('❌ Buildings ya products nahi hain!', 'err');
+    btn.disabled = false; btn.textContent = '🚀 Full Test Chalao';
+    return;
+  }
+
+  // STEP 1: 10 customers create karo
+  log('👥 STEP 1: 10 Test Customers Create Ho Rahe Hain...', 'info');
+  setProgress(5, 'Customers create ho rahe hain...');
+  let successCust = 0, failCust = 0;
+
+  for (let i = 0; i < 10; i++) {
+    const phone = '9' + String(800000001 + i).padStart(9, '0');
+    const bldgId = bldgKeys[i % bldgKeys.length];
+    const bldg = buildings[bldgId];
+    const wingKeys = bldg.wings ? Object.keys(bldg.wings) : [];
+    if (wingKeys.length === 0) {
+      log(`⚠️ Customer ${i+1}: Building mein wing nahi — skip`, 'warn');
+      failCust++;
+      continue;
+    }
+    const wingId = wingKeys[i % wingKeys.length];
+    const wing = bldg.wings[wingId];
+    const defTokens = {};
+    prodKeys.forEach(pid => { defTokens[pid] = 10; }); // 10 tokens har product
+    const custData = {
+      phone, name: `Test Customer ${i+1}`,
+      buildingId: bldgId, building: bldg.name,
+      wingId: wingId, wing: wing.name,
+      flat: String(100 + i + 1),
+      pass: 'test1234',
+      tokens: defTokens,
+      createdAt: new Date().toISOString(),
+      status: 'active',
+      isTestData: true
+    };
+    try {
+      // Firebase Auth — email format: phone@pbmilk.app
+      const email = phone + '@pbmilk.app';
+      try {
+        await auth.createUserWithEmailAndPassword(email, 'test1234');
+      } catch (authErr) {
+        if (authErr.code === 'auth/email-already-in-use') {
+          log(`  ℹ️ Customer ${i+1} (${phone}) auth already exists — DB update karunga`, 'warn');
+        } else {
+          throw authErr;
+        }
+      }
+      await db.ref('customers/' + phone).set(custData);
+      createdCustomers.push(phone);
+      successCust++;
+      log(`  ✅ Customer ${i+1}: ${custData.name} | ${bldg.name} - ${wing.name} - Flat ${custData.flat}`, 'ok');
+    } catch (e) {
+      failCust++;
+      log(`  ❌ Customer ${i+1} (${phone}) failed: ${e.message}`, 'err');
+    }
+    setProgress(5 + (i + 1) * 3, `Customer ${i+1}/10 done...`);
+    await sleep(300);
+  }
+
+  log(`👥 Customers: ${successCust} success, ${failCust} failed`, successCust > 0 ? 'ok' : 'err');
+
+  if (successCust === 0) {
+    log('❌ Koi bhi customer create nahi hua — test band!', 'err');
+    showResults(0, 0, 0);
+    btn.disabled = false; btn.textContent = '🚀 Full Test Chalao';
+    return;
+  }
+
+  // STEP 2: Har customer ke liye order place karo
+  log('', 'info');
+  log('🛒 STEP 2: Orders Place Ho Rahe Hain...', 'info');
+  setProgress(40, 'Orders place ho rahe hain...');
+  let successOrders = 0, failOrders = 0;
+  const today = getISTDateString();
+
+  for (let i = 0; i < createdCustomers.length; i++) {
+    const phone = createdCustomers[i];
+    const custSnap = await db.ref('customers/' + phone).once('value');
+    const cust = custSnap.val();
+    if (!cust) { log(`  ⚠️ Customer ${phone} data nahi mila`, 'warn'); continue; }
+
+    // Random products select karo (1-3 products)
+    const selectedProds = prodKeys.slice(0, Math.min(2, prodKeys.length));
+    const items = {};
+    const newTokens = { ...cust.tokens };
+    let totalQty = 0, totalAmt = 0;
+    selectedProds.forEach(pid => {
+      const qty = 1;
+      const avail = cust.tokens?.[pid] || 0;
+      if (avail >= qty) {
+        items[pid] = qty;
+        newTokens[pid] = (newTokens[pid] || 0) - qty;
+        totalQty += qty;
+        totalAmt += qty * (products[pid]?.price || 0);
+      }
+    });
+
+    if (totalQty === 0) {
+      log(`  ⚠️ ${cust.name}: Tokens nahi hain — order skip`, 'warn');
+      continue;
+    }
+
+    try {
+      // Token update
+      await db.ref('customers/' + phone + '/tokens').set(newTokens);
+      // Order save
+      const oid = 'test_ord_' + Date.now() + '_' + i;
+      await db.ref('orders/' + oid).set({
+        id: oid,
+        customerId: phone,
+        customerName: cust.name,
+        buildingId: cust.buildingId,
+        building: cust.building,
+        wingId: cust.wingId,
+        wing: cust.wing,
+        flat: cust.flat,
+        items,
+        totalQuantity: totalQty,
+        totalAmount: totalAmt,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        date: today,
+        isTestData: true
+      });
+      createdOrders.push(oid);
+      successOrders++;
+      const itemsText = selectedProds.map(pid => products[pid]?.name + '×1').filter((_, idx) => items[selectedProds[idx]]).join(', ');
+      log(`  ✅ Order: ${cust.name} | Flat ${cust.flat} | ${itemsText} | ₹${totalAmt}`, 'ok');
+    } catch (e) {
+      failOrders++;
+      log(`  ❌ Order failed for ${phone}: ${e.message}`, 'err');
+    }
+    setProgress(40 + (i + 1) * 4, `Order ${i+1}/${createdCustomers.length}...`);
+    await sleep(200);
+  }
+
+  log(`🛒 Orders: ${successOrders} success, ${failOrders} failed`, successOrders > 0 ? 'ok' : 'err');
+
+  // STEP 3: Admin panel check — aaj ke orders fetch karo
+  log('', 'info');
+  log('🔍 STEP 3: Admin Panel Check...', 'info');
+  setProgress(90, 'Admin panel check ho raha hai...');
+  await sleep(500);
+
+  const osSnap = await db.ref('orders').once('value');
+  let adminVisibleOrders = 0;
+  const todayIST = getISTDateString();
+  osSnap.forEach(child => {
+    const o = child.val();
+    if (o && o.date === todayIST && o.items && Object.keys(o.items).length > 0) {
+      adminVisibleOrders++;
+    }
+  });
+
+  log(`🔍 Admin panel mein aaj dikhne wale orders: ${adminVisibleOrders}`, adminVisibleOrders > 0 ? 'ok' : 'err');
+  log(`🔍 Humne abhi place kiye: ${successOrders}`, 'info');
+
+  if (adminVisibleOrders >= successOrders) {
+    log('✅ ORDERS ADMIN PANEL MEIN DIKH RAHE HAIN! Bug nahi hai!', 'ok');
+  } else {
+    log(`❌ PROBLEM MILI! ${successOrders} orders place kiye par ${adminVisibleOrders} hi dikh rahe hain`, 'err');
+    log('🔍 Date mismatch check karo...', 'warn');
+    // Date debug
+    const allDates = new Set();
+    osSnap.forEach(child => {
+      const o = child.val();
+      if (o && o.isTestData) allDates.add(o.date);
+    });
+    log(`📅 Test orders ki dates: ${[...allDates].join(', ')}`, 'warn');
+    log(`📅 getISTDateString() return: ${todayIST}`, 'warn');
+  }
+
+  setProgress(100, '✅ Test Complete!');
+  showResults(successCust, successOrders, adminVisibleOrders);
+  btn.disabled = false;
+  btn.textContent = '🚀 Full Test Chalao';
+  log('', 'info');
+  log('====== TEST COMPLETE ======', 'info');
+}
+
+function showResults(custs, orders, visible) {
+  const container = document.getElementById('results');
+  const ordersMatch = orders > 0 && visible >= orders;
+  container.innerHTML = `
+    <div class="stat"><span>✅ Customers Created:</span><span class="stat-val">${custs}/10</span></div>
+    <div class="stat"><span>🛒 Orders Placed:</span><span class="stat-val">${orders}</span></div>
+    <div class="stat"><span>👁️ Admin mein Visible:</span>
+      <span class="stat-val" style="color:${ordersMatch?'#10b981':'#ef4444'}">${visible}</span>
+    </div>
+    <div style="margin-top:12px;padding:12px;border-radius:10px;background:${ordersMatch?'#d1fae5':'#fee2e2'};color:${ordersMatch?'#065f46':'#991b1b'};font-weight:700;font-size:14px">
+      ${ordersMatch
+        ? '✅ App sahi kaam kar raha hai! Orders admin mein dikh rahe hain.'
+        : '❌ Bug confirmed! Orders admin mein nahi dikh rahe — log dekho.'}
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:#6b7280">
+      📱 Ab apne app ka Admin Panel kholo → Orders tab → confirm karo
+    </div>
+  `;
+}
+
+async function cleanTestData() {
+  if (!connected) return;
+  if (!confirm('⚠️ Saara test data delete karein?\n\n(isTestData:true wale customers aur orders)')) return;
+  log('🗑️ Test data delete ho raha hai...', 'warn');
+  try {
+    const [cs, os] = await Promise.all([
+      db.ref('customers').once('value'),
+      db.ref('orders').once('value')
+    ]);
+    const delPromises = [];
+    cs.forEach(child => { const v = child.val(); if (v?.isTestData) delPromises.push(db.ref('customers/' + child.key).remove()); });
+    os.forEach(child => { const v = child.val(); if (v?.isTestData) delPromises.push(db.ref('orders/' + child.key).remove()); });
+    await Promise.all(delPromises);
+    log(`✅ ${delPromises.length} records delete ho gaye!`, 'ok');
+    createdCustomers = []; createdOrders = [];
+    await checkData();
+    document.getElementById('results').innerHTML = '<div style="color:#6b7280;text-align:center">Test data delete ho gaya. Dobara test chalao.</div>';
+  } catch (e) {
+    log('❌ Delete failed: ' + e.message, 'err');
+  }
+}
+</script>
+</body>
+</html>
